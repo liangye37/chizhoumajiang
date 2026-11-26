@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import pkg from '../../../package.json'
 import RoomPanel from './RoomPanel.vue'
 import LobbyThemeVisual from './LobbyThemeVisual.vue'
 import GameSettingsSummary from './GameSettingsSummary.vue'
@@ -59,6 +60,7 @@ const emit = defineEmits<{
 type DialogName = 'join' | 'rule' | 'character' | null
 const dialog = ref<DialogName>(null)
 
+const appVersion = `v${pkg.version}`
 const selfHostConfig = getSelfHostConfig()
 const lanAvailable = Boolean(selfHostConfig) || import.meta.env.DEV
 const lanAddress = selfHostConfig && typeof window !== 'undefined' ? window.location.origin : ''
@@ -241,6 +243,7 @@ function viewRules() {
       <RuleVariantPicker v-else :model-value="selectedRule" @close="dialog = null" @confirm="selectRule" @view-rules="viewRules" />
     </LobbyDialog>
 
+    <span class="lobby-version" :class="{ 'beside-fab': gameMode === 'local' }" aria-label="当前版本号">{{ appVersion }}</span>
   </section>
 </template>
 
@@ -293,5 +296,32 @@ function viewRules() {
   color: var(--theme-accent);
   font-style: normal;
   white-space: nowrap;
+}
+.lobby-version {
+  position: fixed;
+  z-index: 65;
+  right: max(16px, var(--safe-right));
+  bottom: max(14px, var(--safe-bottom));
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--theme-border) 55%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-panel) 78%, transparent);
+  color: var(--theme-text-muted);
+  font: 600 12px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: .04em;
+  pointer-events: none;
+  user-select: none;
+}
+.lobby-version.beside-fab {
+  right: max(68px, calc(var(--safe-right) + 56px));
+  bottom: max(22px, calc(var(--safe-bottom) + 12px));
+}
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  .lobby-version,
+  .lobby-version.beside-fab {
+    right: max(12px, var(--safe-right));
+    bottom: max(8px, var(--safe-bottom));
+    font-size: 11px;
+  }
 }
 </style>
