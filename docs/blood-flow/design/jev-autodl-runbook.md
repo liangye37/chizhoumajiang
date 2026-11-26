@@ -1,0 +1,154 @@
+# AutoDL GPU 路线 Runbook（OpenJev LoRA 蒸馏 + 快速 pilot）
+
+前置决策：用户拍板走 AutoDL 自炼路线（2026-09-23），不做官方 Jev API 对比。本文档是远端操作的唯一口径；预注册门槛与预算写死在 §3/§6，跑之前不改。
+
+## 0. 角色分工
+
+- **用户**：注册 AutoDL（实名+充值 ¥50–100）、租机、把本仓库生成的 SSH 公钥加进控制台、把实例 ssh 指令发给代理。
+- **代理**：上传数据/脚本 → 远端 E1/E2（/E3）→ 门槛判定 → SSH 隧道 + 本地 pilot → 拉回产物 → 结案记录。
+- **凭据纪律**：私钥在本地 `~/.ssh/autodl_jev`（永不入库）；实例密码只在用户↔控制台之间，代理不落盘不落日志。
+
+## 1. 实例规格与镜像
+
+- GPU：**RTX 4090 24GB 优先，3090 24GB 亦可**（按时计费；两台都够 1.5B 全量 LoRA 与 7B 推理；7B LoRA bf16 在 24GB 上贴边，用子集+max-len 4096 控制显存）。
+- **vGPU 切片（如 vGPU-32GB ¥1.58/时）可接受**：显存切片独占（32GB 比 4090 宽裕，利于 7B 预案），但**算力与邻居分时共享**——墙钟时间随邻居负载波动（列表"空闲/总量 1/8"即邻居数）。租时两查：①有独享 4090 ≤¥2.2/时有货则优先独享（时间可预期）；②租 vGPU 则接受波动，且**预算 8h 上限若在门槛点不够跑 E4，停机向用户申请追加，不擅自超支**。
+- 镜像：基础镜像选 **PyTorch 2.x（≥2.1）/ CUDA 12.x / Python ≥3.10**（驱动 595/CUDA≤13.2 的机器向下兼容 12.x 运行时）。
+- 磁盘：**系统盘 30GB 只跑系统**；模型缓存与全部产物在 50GB 数据盘（`HF_HOME=/root/autodl-tmp/hf`，setup 脚本已处理并符号链接 /root/jev、/root/OpenJev）。
+- 区域：有货即可（国内区域对本机延迟无感——瓶颈在推理不在网络）。
+
+## 2. SSH 公钥与连通
+
+本机已生成专用密钥对（ed25519，注释 `jev-autodl`）。用户把公钥粘贴到 AutoDL 控制台「账号设置 → SSH 公钥」（对全部实例生效），或在实例里 `echo '<pubkey>' >> ~/.ssh/authorized_keys`。之后代理用：
+
+```powershell
+ssh -i $env:USERPROFILE\.ssh\autodl_jev -p <端口> root@<host>   # 非交互执行
+scp -i $env:USERPROFILE\.ssh\autodl_jev -P <端口> <本地文件> root@<host>:<远端路径>
+```
+
+## 3. 上传清单（本地 → 实例 /root/jev/）
+
+| 文件 | 用途 |
+|---|---|
+| `work/jev-calibration/train-v3.jsonl`（1821 行） | 训练集 A |
+| `work/jev-calibration/train-v3-ext.jsonl`（seeds 1030–1089） | 训练集 B（合并后 ~7k 行） |
+| `work/jev-calibration/dev-v3.jsonl`（858 行） | **唯一裁判集**（不参与任何拟合；模型选择用它即视为轻度复用，已记录） |
+| `scripts/openjev-fit-calibration.py` | GPU 版温度校正+评估（`--device cuda`） |
+| `scripts/autodl/setup-openjev.sh` | 一键装环境 |
+| `scripts/autodl/run-experiments.sh` | 编排脚本：nohup 后台一次跑完 E2a→E1→E1b→E2→评估→校准，日志落 `/root/jev/logs/`，`set -e` 失败即停 |
+
+远端合并：`cat train-v3.jsonl train-v3-ext.jsonl > train-v3-all.jsonl`
+
+## 4. 远端实验序列（命令即口径）
+
+下列序列的可执行形态是 `scripts/autodl/run-experiments.sh`（随包上传；镜像无 tmux，用
+`nohup bash /root/jev/run-experiments.sh > /root/jev/logs/nohup.out 2>&1 &` 后台跑；
+代理 ssh 轮询日志即可，不需要逐步交互）。脚本自带 conda source（非交互 ssh 没有 conda PATH）。
+正文命令保留为口径参考与单步排障用。门槛判定（E2 评估数字）与 E3/E4
+决策由代理读 `logs/e2-eval.json` 后做，脚本不越权。
+
+```bash
+# 每个 ssh 会话开头都要带（非交互 shell 不读 .bashrc）：模型缓存与产物在数据盘
+export HF_HOME=/root/autodl-tmp/hf
+# 基座为 ModelScope 下载的本地目录（HF 直连在数据中心 IP 实测 OSError）
+MODEL15=/root/autodl-tmp/models/Qwen2.5-1.5B-Instruct
+MODEL7=/root/autodl-tmp/models/Qwen2.5-7B-Instruct
+cd /root/OpenJev && source /etc/network_turbo 2>/dev/null || true
+
+# E1：7B zero-shot 在 dev 上的成绩单（对照 1.5B-校准版：acc 26.4% / NLL 1.866 / ECE 0.140）
+openjev eval -m $MODEL7 --dtype bfloat16 --data /root/jev/dev-v3.jsonl
+
+# E1b：1.5B zero-shot 全量 dev（858 条）——与 E2 LoRA 同口径的参照系
+#      （此前的 26.4%/1.866 是 250 条子采样 + 温度校正后的数字，口径不同，只作背景参考）
+openjev eval -m $MODEL15 --dtype bfloat16 --data /root/jev/dev-v3.jsonl
+
+# E2a（远端 5 分钟冒烟，必做勿跳）：训练循环用 vendored 修复版 train_calibrated_chunked.py。
+#   根因（本地 Windows/CPU 段错误 0xC0000005 与远端 32GB CUDA OOM 同病）：上游
+#   train_calibrated.py 把全部候选行单批 forward 并对全词表全宽度 logits.float()+log_softmax
+#   ≈ [14×2k×151936]×4B ≈ 39GB。修复版逐候选行 forward + 目标位置 logsumexp，
+#   联合 softmax 损失语义不变（decision_loss 输入逐候选 logprob 之和，候选间无耦合），峰值 ~5GB。
+head -n 100 /root/jev/train-v3-all.jsonl > /root/jev/train-smoke.jsonl
+python /root/jev/train_calibrated_chunked.py --model $MODEL15 \
+  --data /root/jev/train-smoke.jsonl --output /root/jev/ckpt/smoke --epochs 1 --max-steps 3 \
+  --grad-accum 1 --max-len 4096 --dtype bfloat16
+# 预期输出：trainable params 行、"100 training decisions"、3 条 step loss、saved LoRA adapter
+
+# E2：LoRA 蒸馏 1.5B（train 全量 7413 条，2 epochs）
+#   --max-len 必须 ≥3072：v3 样本实测 token 长度 p50≈1.9k / p95≈2.2k / max 2464
+#   （scripts/openjev-token-probe.py，2026-09-23 实测），默认 2048 会**静默跳过 19–26% 样本**；
+#   4096 全覆盖且留余量（该参数只做过滤不做 padding，放大无计算代价）。
+#   brier 0.5 按 OpenJev README 推荐（NLL+Brier 同时压，兼顾准确率与校准）。
+python /root/jev/train_calibrated_chunked.py --model $MODEL15 \
+  --data /root/jev/train-v3-all.jsonl --eval-data /root/jev/dev-v3.jsonl \
+  --output /root/jev/ckpt/lora-1.5b-v3 --epochs 2 --max-len 4096 --brier-weight 0.5 \
+  --grad-accum 1
+#   （--grad-accum 1 是显存口径：单样本图 ≈15GB，accum≥2 驻留多样本图 → 30GB OOM 实测；
+#     总 forward 量不变，仅更新频率变化）
+
+# E2 评估（训练脚本尾部也会打 eval，这里用统一口径再跑一次并留档）
+openjev eval -m $MODEL15 --adapter /root/jev/ckpt/lora-1.5b-v3 \
+  --dtype bfloat16 --data /root/jev/dev-v3.jsonl
+
+# E3（条件触发：E2 未达标且 E1 acc≥35% 且预算余量>3h）：7B LoRA 子集训练
+#   显存口径（chunked 版）：7B bf16 权重 15GB + 单行 logits ~4.9GB（含 autograd 保留 ~10GB）
+#   + 激活 ~4GB ≈ 29GB / 31.5GB——贴边。对策（按序）：① 仍 OOM 则加
+#   `model.gradient_checkpointing_enable()`（vendored 脚本里 use_cache=False 之后一行）；
+#   ② 仍 OOM → 放弃 E3 如实记录——**不许**改损失语义（joint softmax 要求全候选同向量，
+#   chunk 只切 forward 不切损失输入，这是修复版的边界）。
+#   head -n 2500 /root/jev/train-v3-all.jsonl > /root/jev/train-sub.jsonl
+#   python /root/jev/train_calibrated_chunked.py --model $MODEL7 \
+#     --data /root/jev/train-sub.jsonl --eval-data /root/jev/dev-v3.jsonl \
+#     --output /root/jev/ckpt/lora-7b-v3 --epochs 1 --max-len 4096 --brier-weight 0.5 \
+#     --grad-accum 1
+
+# 达标后：给胜出模型重新拟合温度（GPU 上分钟级；dev 全量 858）
+#   ⚠️ 必须带 --adapter：校正对象是「基座+LoRA」的组合，不带就校到基座头上（张冠李戴）
+python /root/jev/openjev-fit-calibration.py --device cuda \
+  --model $MODEL15 --adapter /root/jev/ckpt/lora-1.5b-v3 \
+  --train /root/jev/train-v3-all.jsonl --dev /root/jev/dev-v3.jsonl \
+  --train-limit 800 --dev-limit 0 --sample-seed 7 \
+  --cache-dir /root/jev/cache-gpu --output /root/jev/calibration-lora.json \
+  --metrics /root/jev/metrics-lora.json
+# 注意：--dev-limit 0 = dev 全量；E3 胜出时 --model/--adapter/缓存目录相应换成 7B 的
+```
+
+## 5. 预声明门槛（跑之前写死）
+
+- **进 E4（pilot）条件**：胜出配置在 dev-v3 上 `accuracy ≥ 0.50` 且 `NLL ≤ 1.5`（对照：1.5B-zero-shot-校准版 26.4%/1.866；蒸馏若连 50% 都不到，说明 1.5B 容量或数据量不够，pilot 必然重演拒绝，不值 GPU 时长）。
+- E1 的 7B zero-shot 成绩单独记录（回答"更大基座 zero-shot 有没有质变"），不单独作为进 E4 的依据——E4 用**校准后**的胜出模型。
+- 不达标：拉回全部日志与 metrics，结案「蒸馏路线在当前数据/容量下不成立」，给下一步选项（扩数据到 3 万条 / 7B 全量 / 信号源方案），**不擅自放宽门槛**。
+
+## 6. 预算与关机纪律
+
+- GPU 租用累计 **≤ ¥60 或 ≤ 8 小时**（先到为准）；每个实验步骤结束立刻核对已用时长。
+- 参考耗时（4090）：setup+下载 ~20min；E1 ~20min；E2 训练 ~1.5–3h；温度拟合 ~15min；E3 ~2–3h（子集）。
+- 超限即停：保存产物 → 关机 → 如实报告进度与差额。
+- AutoDL「无卡模式」（¥0.1/h）只用于传文件/装环境；训练评估必须 GPU 计费模式。
+
+## 7. E4：pilot（远端 serve + 本地 runner，SSH 隧道）
+
+```powershell
+# 实例上（nohup 后台跑，防掉线；镜像无 tmux）：
+openjev serve -m $MODEL15 --adapter /root/jev/ckpt/lora-1.5b-v3 `
+  --calibration /root/jev/calibration-lora.json --dtype bfloat16 --host 127.0.0.1 --port 8300
+
+# 本地隧道（另开窗口挂着）：
+ssh -i $env:USERPROFILE\.ssh\autodl_jev -CNg -L 8300:127.0.0.1:8300 -p <端口> root@<host>
+
+# 本地 pilot（与 cpu-pilot-v3 完全同参，仅换 backend 标签；baseline 复用 seeds 3000-3009 已有数据，
+# 但扩样教训在前——本轮直接 N=30：seeds 3000-3029，hint 臂跑满，baseline 若缺 3010-3029 则补跑）：
+$env:JEV_SELFPLAY_RUN='1'; $env:JEV_SELFPLAY_TAG='gpu-lora-pilot'; $env:JEV_SELFPLAY_ARMS='hint,baseline'
+$env:JEV_SELFPLAY_MATCHES='30'; $env:JEV_SELFPLAY_SEED='3000'
+$env:JEV_BASE_URL='http://127.0.0.1:8300'; $env:JEV_BACKEND='openjev-qwen2.5-1.5b-lora-v3-cal'
+node node_modules/vitest/vitest.mjs run --dir scripts jev-selfplay-run.test.ts
+```
+
+结案口径沿用设计文档 §4（含 N≥30 方差条款）：配对差 ≥+50 且回退率<5% → 采用；≤−100 或 CI 上界<0 → 拒绝；其余 → 不采用。
+
+## 8. 产物回传清单（scp → work/jev-calibration/autodl/）
+
+- `ckpt/lora-1.5b-v3/`（tar 后 ~50–200MB；7B adapter 另计）
+- `calibration-lora.json`、`metrics-lora.json`
+- E1/E2/E3 的 eval 输出（终端 JSON 留档成 `.json`）
+- 训练日志（loss 曲线段）
+
+回传后本地即可 `openjev serve --adapter`（CPU 也能跑蒸馏模型，只是慢——正式批量仍走 GPU）。

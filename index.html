@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-2PMNQJPWBM"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-2PMNQJPWBM');
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="keywords" content="池州麻将, 枞阳麻将, 有钻麻将, 在线麻将, 网页麻将, 单机麻将, 四人麻将, 3D麻将" />
+    <meta name="description" content="池州麻将是一款可直接在浏览器游玩的单机四人麻将游戏，支持东风场、半庄场、翻钻癞子、碰杠、自摸与抢杠胡。" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="application-name" content="池州麻将" />
+    <meta name="apple-mobile-web-app-title" content="池州麻将" />
+    <meta name="color-scheme" content="only light" />
+    <meta name="theme-color" content="#102b24" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:site_name" content="池州麻将" />
+    <meta property="og:title" content="池州麻将｜一款池州特有的地方麻将游戏玩法" />
+    <meta property="og:description" content="在浏览器中体验池州麻将：单机四人对局，支持东风场、半庄场、翻钻癞子、碰杠、自摸与抢杠胡。" />
+    <meta property="og:image" content="/social-preview.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="676" />
+    <meta property="og:image:alt" content="池州麻将游戏预览" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="池州麻将｜一款池州特有的地方麻将游戏玩法" />
+    <meta name="twitter:description" content="在浏览器中体验池州麻将：单机四人对局，支持东风场、半庄场、翻钻癞子、碰杠、自摸与抢杠胡。" />
+    <meta name="twitter:image" content="/social-preview.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": ["VideoGame", "WebApplication"],
+        "name": "池州麻将",
+        "alternateName": "枞阳有钻麻将",
+        "description": "一款可直接在浏览器游玩的单机四人麻将游戏，支持东风场、半庄场、翻钻癞子、碰杠、自摸与抢杠胡。",
+        "applicationCategory": "GameApplication",
+        "applicationSubCategory": "Mahjong game",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript and a modern web browser",
+        "inLanguage": "zh-CN",
+        "softwareVersion": "1.0.0",
+        "isAccessibleForFree": true,
+        "playMode": "SinglePlayer",
+        "numberOfPlayers": 1,
+        "offers": {
+          "@type": "Offer",
+          "price": 0,
+          "priceCurrency": "CNY"
+        }
+      }
+    </script>
+    <title>池州麻将｜一款池州特有的地方麻将游戏玩法</title>
+    <script>
+      // The small bootstrap module can itself fail before its retry UI is wired.
+      window.addEventListener('error', function (event) {
+        if (!(event.target instanceof HTMLScriptElement) || event.target.type !== 'module') return;
+        function showRetry() {
+          var splash = document.getElementById('game-startup');
+          if (!splash) return;
+          splash.querySelector('[role=status]').textContent = '启动文件加载失败';
+          var retry = splash.querySelector('button');
+          retry.hidden = false;
+          retry.onclick = function () { location.reload(); };
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', showRetry, { once: true });
+        else showRetry();
+      }, true);
+    </script>
+    <style>
+      #game-startup {
+        position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center;
+        margin: 0; padding: 24px; box-sizing: border-box; color: #ece7d8; text-align: center;
+        background: radial-gradient(ellipse at 38% 32%, #244c40 0%, #112f27 48%, #071a16 100%);
+        font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-variant-numeric: tabular-nums;
+      }
+      #game-startup section { width: min(100%, 350px); }
+      #game-startup h1 {
+        margin: 0 0 32px; color: #f4daa0; font: 700 clamp(34px, 6vw, 52px)/1.2 "Noto Serif SC", SimSun, serif;
+        letter-spacing: .14em; text-indent: .14em;
+      }
+      #game-startup progress { display: block; width: 100%; height: 6px; overflow: hidden;
+        appearance: none; border: 0; border-radius: 9px; background: #081c17; color: #e7c779; }
+      #game-startup progress::-webkit-progress-bar { background: #081c17; border-radius: 9px; }
+      #game-startup progress::-webkit-progress-value { background: linear-gradient(90deg,#b99a5b,#f6da95); border-radius: 9px; }
+      #game-startup progress::-moz-progress-bar { background: #e7c779; border-radius: 9px; }
+      #game-startup p { margin: 16px 0 0; font-size: 15px; line-height: 1.5; }
+      #game-startup small { display: block; min-height: 1.5em; margin-top: 4px; color: #b0c2b9; font-size: 13px; overflow-wrap: anywhere; }
+      #game-startup button { min-height: 44px; margin-top: 16px; padding: 0 24px; border: 1px solid #ccb780;
+        border-radius: 6px; background: #203d32; color: #f4daa0; font: inherit; cursor: pointer; }
+      #game-startup button:hover, #game-startup button:focus-visible { background: #355649; }
+    </style>
+  </head>
+  <body>
+    <noscript>
+      <main>
+        <h1>池州麻将</h1>
+        <p>这是一款可直接在浏览器游玩的单机四人麻将游戏。请启用 JavaScript 后开始东风场或半庄场对局。</p>
+      </main>
+    </noscript>
+    <div id="game-startup">
+      <section aria-labelledby="startup-title">
+        <h1 id="startup-title">池州麻将</h1>
+        <progress aria-label="游戏资源加载进度" value="0" max="100"></progress>
+        <p><span role="status">正在准备游戏资源</span> <span id="startup-percent">0%</span></p>
+        <small id="startup-detail"></small>
+        <button type="button" hidden>重新加载</button>
+      </section>
+    </div>
+    <noscript><style>#game-startup { display: none; }</style></noscript>
+    <!-- game-asset-manifest -->
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

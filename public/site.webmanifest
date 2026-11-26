@@ -1,0 +1,19 @@
+{
+  "name": "池州麻将",
+  "short_name": "池州麻将",
+  "description": "在线单机四人池州麻将游戏（枞阳有钻玩法）",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#071b14",
+  "theme_color": "#102b24",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

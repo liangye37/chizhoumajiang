@@ -1,0 +1,25 @@
+import { expect, test } from '@playwright/test'
+
+test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true })
+test.setTimeout(60_000)
+
+test('P2P 房间切回单机，手机主题恢复 master 的本地偏好', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('lgm_disclaimer_agreed', '1'))
+  await page.goto('/?theme=jade&mockPeer=local-theme-restore')
+  const app = page.locator('main.game-app')
+  await expect(app).toHaveAttribute('data-table-theme', 'jade')
+  await page.getByRole('radio', { name: /联机对战/ }).click()
+  await page.getByPlaceholder('输入昵称').fill('主题测试')
+  await page.getByRole('button', { name: '创建房间', exact: true }).click()
+  await page.getByRole('button', { name: '确认创建', exact: true }).click()
+  const accept = page.getByRole('button', { name: '同意并继续', exact: true })
+  if (await accept.isVisible()) await accept.click()
+  await expect(page.locator('.room-panel')).toBeVisible({ timeout: 20_000 })
+  await page.getByRole('button', { name: '切换牌桌主题', exact: true }).click()
+  await page.getByRole('menuitemradio', { name: /红木金丝/ }).click()
+  await expect(app).toHaveAttribute('data-table-theme', 'rosewood')
+  await page.getByRole('button', { name: '离开房间', exact: true }).click()
+  await page.getByRole('radio', { name: /单机对战/ }).click()
+  await expect(app).toHaveAttribute('data-table-theme', 'jade')
+  await expect(page.locator('.start-button')).toBeVisible()
+})
