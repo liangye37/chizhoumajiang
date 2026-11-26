@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TileType } from '../../core/contracts/types'
 import { createWall } from '../../core/rules/tiles'
+import { resolveRoundResultPresentation } from '../../../theme/themeEventPresentation'
 import { useLotusGame } from './lotusGame'
 
 function stubWindow() {
@@ -137,6 +138,17 @@ describe('跑风整局实测演示', () => {
     expect(game.result.value?.winType).toBe('paofeng')
     expect(game.result.value?.paofengSuccess).toBe(true)
     expect(game.result.value?.details?.some((d) => d.label === '跑风成功' && d.multiplier === 2)).toBe(true)
+    expect(resolveRoundResultPresentation(game.result.value)).toEqual({
+      kind: 'paofeng',
+      label: '跑风成功',
+      strength: 'climax',
+    })
+
+    // 点击继续进入下一局，确认局数推进且 paofengPair 已清空
+    game.nextRound({ dealer: 0, openingSecondDice: [1, 1] })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(game.round.value).toBe(2)
+    expect(game.players[0].paofengPair).toEqual([])
     trace.push(`3. 经过座位 [${[...seenSeats].join(' → ')}] 轮转一圈回到本家：${game.result.value?.winner} 跑风成功！番型=${game.result.value?.details?.map((d) => d.label).join('+')}, 总得分=+${game.result.value?.totalWon}, 四家分数=[${game.players.map((p) => p.score).join(', ')}]`)
     console.log('\n=== 跑风实测流程 ===\n' + trace.join('\n'))
   })

@@ -34,6 +34,8 @@ export type RoundResultPresentationKind =
   | 'robbed-kong'
   | 'tianhu'
   | 'dihu'
+  | 'paofeng'
+  | 'caught-paofeng'
 
 export interface RoundResultPresentation {
   kind: RoundResultPresentationKind
@@ -48,13 +50,15 @@ const ROUND_RESULT_PRESENTATIONS: Record<RoundResultPresentationKind, RoundResul
   'robbed-kong': { kind: 'robbed-kong', label: '抢杠胡', strength: 'climax' },
   tianhu: { kind: 'tianhu', label: '天胡', strength: 'climax' },
   dihu: { kind: 'dihu', label: '地胡', strength: 'climax' },
+  paofeng: { kind: 'paofeng', label: '跑风成功', strength: 'climax' },
+  'caught-paofeng': { kind: 'caught-paofeng', label: '捉跑风', strength: 'climax' },
 }
 
 export function resolveRoundResultPresentation(result: RoundResult | null | undefined): RoundResultPresentation {
   if (!result || result.draw) return ROUND_RESULT_PRESENTATIONS.draw
   const kind = result.winType
     ?? (result.robbedKong ? 'robbed-kong' : 'self-draw')
-  return ROUND_RESULT_PRESENTATIONS[kind]
+  return ROUND_RESULT_PRESENTATIONS[kind] ?? ROUND_RESULT_PRESENTATIONS['self-draw']
 }
 
 export type ScoreDirection = 'positive' | 'negative' | 'neutral'

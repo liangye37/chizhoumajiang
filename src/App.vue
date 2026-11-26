@@ -606,6 +606,12 @@ const themeLockReason = computed(() => (
   isHost.value ? '对局开始后锁定主题' : '主题由房主控制'
 ))
 
+const tingHintEnabled = ref(localStorage.getItem('lgm_ting_hint') !== '0')
+function toggleTingHint() {
+  tingHintEnabled.value = !tingHintEnabled.value
+  try { localStorage.setItem('lgm_ting_hint', tingHintEnabled.value ? '1' : '0') } catch {}
+}
+
 function changeTableTheme(theme: TableThemeName) {
   if (gameMode.value === 'remote' && roomId.value) {
     // 联机房间内主题由房主权威控制：非房主（或开局后）禁用切换。
@@ -654,9 +660,11 @@ function changeTableTheme(theme: TableThemeName) {
         :theme-name="tableThemeName"
         :theme-locked="themeLocked"
         :theme-lock-reason="themeLockReason"
+        :ting-hint-enabled="tingHintEnabled"
         @quit="gameMode === 'local' ? quitLocalMatch() : quitMatch()"
         @open-rules="rulesOpen = true"
         @change-theme="changeTableTheme"
+        @toggle-ting-hint="toggleTingHint"
       />
 
       <GameTableHud
@@ -696,6 +704,7 @@ function changeTableTheme(theme: TableThemeName) {
         :user-kongs="userKongs"
         :user-has-wind-kong="userHasWindKong"
         :user-can-paofeng="userCanPaofeng"
+        :ting-hint-enabled="tingHintEnabled"
         :auto-play-enabled="gameMode === 'remote'"
         :auto-play="remoteAutoPlay"
         :llm-bubbles="llmBubbles"

@@ -25,6 +25,7 @@ interface Props {
   themeLocked?: boolean
   /** 锁定时给用户的提示文案。 */
   themeLockReason?: string
+  tingHintEnabled?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -32,11 +33,13 @@ const props = withDefaults(defineProps<Props>(), {
   baseScore: BASE_SCORE,
   themeLocked: false,
   themeLockReason: '主题由房主控制',
+  tingHintEnabled: true,
 })
 const emit = defineEmits<{
   quit: []
   openRules: []
   changeTheme: [theme: TableThemeName]
+  toggleTingHint: []
 }>()
 
 const imageBase = `${import.meta.env.BASE_URL}img/`
@@ -125,6 +128,17 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <nav>
+      <button
+        v-if="phase !== 'lobby'"
+        type="button"
+        class="ting-hint-toggle topbar-control"
+        :aria-pressed="tingHintEnabled"
+        :aria-label="tingHintEnabled ? '关闭听牌提示' : '开启听牌提示'"
+        :title="tingHintEnabled ? '听牌提示：已开启（点击关闭）' : '听牌提示：已关闭（点击开启）'"
+        @click="emit('toggleTingHint')"
+      >
+        <TableControlIcon name="waits" />
+      </button>
       <div ref="themePicker" class="theme-picker">
         <button
           type="button"

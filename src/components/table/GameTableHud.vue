@@ -96,9 +96,12 @@ interface Props {
   chatBubbles?: Record<number, TableChatBubble>
   emoteCues?: readonly TableEmoteCue[]
   sendInteraction?: (action: TableInteraction) => boolean
+  tingHintEnabled?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  tingHintEnabled: true,
+})
 const userAnimeStyle = computed(() => props.themeName === 'llmAnime'
   ? { '--anime-accent': animeCharacterAccent(props.user.characterId) }
   : undefined)
@@ -365,6 +368,7 @@ function isReformDiscard(index: number, tile: TileType) {
   return Boolean(hint && tile === hint.discard && !props.bloodFlow?.seats[props.user.seat].locked)
 }
 function toggleWaits() {
+  if (!props.tingHintEnabled) { waitsOpen.value = false; return }
   if (waitsOpen.value) { waitsOpen.value = false; return }
   if (!activeWaits.value && props.userTingOptions.length) {
     const index = props.bloodFlow?.seats[props.user.seat].locked ? userDrawnIndex.value
@@ -432,7 +436,8 @@ watch([userIdentity, handRack], ([identity, rack], _, onCleanup) => {
   })
 }, { flush: 'post' })
 
-watch(() => props.userDiscardWaits, (value) => { waitsOpen.value = Boolean(value) })
+watch(() => props.tingHintEnabled, (enabled) => { if (!enabled) { waitsOpen.value = false; hoveredDiscard.value = null } })
+watch(() => props.userDiscardWaits, (value) => { waitsOpen.value = Boolean(props.tingHintEnabled && value) })
 watch(() => props.isUserTurn, (value) => { if (!value) waitsOpen.value = false })
 watch(() => props.userKongs, (kongs) => { if (!kongs.length) kongPickerOpen.value = false })
 watch(() => props.actionPrompt, () => { chiPickerOpen.value = false })
@@ -726,8 +731,8 @@ function onAvatarError(entry: GamePlayer) {
           @pointerdown.stop="beginTileGesture(index, $event)" @pointerup.stop="finishTileGesture(index, $event)" @pointercancel="cancelTileGesture"
         >
           <span class="hand-hit-area" aria-hidden="true"></span>
-          <span v-if="isTingDiscard(index, tile) && !isReformDiscard(index, tile)" class="ting-arrow" aria-hidden="true"></span>
-          <span v-if="isReformDiscard(index, tile)" class="ting-arrow reform-arrow" aria-hidden="true"></span>
+          <span v-if="tingHintEnabled && isTingDiscard(index, tile) && !isReformDiscard(index, tile)" class="ting-arrow" aria-hidden="true"></span>
+          <span v-if="tingHintEnabled && isReformDiscard(index, tile)" class="ting-arrow reform-arrow" aria-hidden="true"></span>
           <span v-if="isReformDiscard(index, tile)" class="reform-badge" aria-hidden="true">改</span>
           <MahjongTile :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn || Boolean(bloodFlow?.seats[user.seat].locked && index !== userDrawnIndex)" @choose="handleTileActivation(index, $event)" />
         </div>
@@ -742,7 +747,7 @@ function onAvatarError(entry: GamePlayer) {
           <span v-else>→ 听口更宽、收益更高</span>
         </div>
         <div class="action-bar">
-          <button v-if="userCurrentWaits || userTingOptions.length" class="action waiting-action" data-action-role="secondary" aria-label="查看听牌提示" :title="userCurrentWaits ? '已听牌，查看听口' : '查看打哪张可听'" :aria-expanded="waitsOpen" @click="toggleWaits">
+          <button v-if="tingHintEnabled && (userCurrentWaits || userTingOptions.length)" class="action waiting-action" data-action-role="secondary" aria-label="查看听牌提示" :title="userCurrentWaits ? '已听牌，查看听口' : '查看打哪张可听'" :aria-expanded="waitsOpen" @click="toggleWaits">
             <TableControlIcon name="waits" />
           </button>
           <template v-if="actionPrompt?.type === 'claim'">
@@ -785,7 +790,7 @@ function onAvatarError(entry: GamePlayer) {
         <TableInteractionControls v-if="canInteract && sendInteraction" :send="sendInteraction" />
       </div>
     </div>
-    <div v-if="activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip" :class="{ 'blood-flow-waiting-tip': bloodFlow }">
+    <div v-if="tingHintEnabled && activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip" :class="{ 'blood-flow-waiting-tip': bloodFlow }">
       <div v-if="bloodFlow" class="blood-flow-wait-grid" :style="{ '--bf-wait-cols': bloodFlowWaitColumns, gridTemplateColumns: `repeat(${bloodFlowWaitColumns}, minmax(0, 1fr))` }">
         <div v-for="item in bloodFlowWaitTiles" :key="item.tile" class="blood-flow-wait-tile" :class="{ exhausted: item.remaining === 0 }"
           :aria-label="`${tileName(item.tile)}，自摸预估${item.multiplier ?? '未知'}倍，剩余${item.remaining}张`">
