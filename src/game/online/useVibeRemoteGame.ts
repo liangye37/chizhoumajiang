@@ -758,13 +758,14 @@ export function useVibeRemoteGame({
         }
         handleMessage(message)
       }
-      if (rulesetId.value === 'lotus-legacy') {
+      const effectiveRuleset = rulesetId.value === 'congyang' ? 'lotus-legacy' : rulesetId.value
+      if (effectiveRuleset === 'lotus-legacy') {
         const llmRuntime = createVibeLotusLlmRuntime(resolvedLlm.privateSeats, { onMessage: emitHostLlmMessage })
         activeHostLlmRuntime = llmRuntime
         hostReplayFinalized = false
         hostGame.value = startHostGame({
           room,
-          rulesetId: rulesetId.value,
+          rulesetId: effectiveRuleset,
           mode: matchType.value,
           seatByPeer,
           seatNames,

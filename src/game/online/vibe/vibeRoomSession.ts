@@ -87,13 +87,15 @@ export function createVibeRoomSession({ state, onStart, onClosed, onSeatToken, l
     state.sessionError.value = ''
     state.sessionStatus.value = 'creating'
     try {
-      const created = await createVibeRoom({ mode, rulesetId: rulesetId === 'congyang' ? 'lotus-legacy' : rulesetId, capacity, tableThemeName })
+      const effectiveRuleset: 'lotus-classic' | 'lotus-legacy' | 'lotus-blood-flow' =
+        rulesetId === 'congyang' ? 'lotus-legacy' : rulesetId
+      const created = await createVibeRoom({ mode, rulesetId: effectiveRuleset, capacity, tableThemeName })
       room = created
       state.isHost.value = true
       state.roomId.value = created.roomId
       state.mySeat.value = 0
       state.matchType.value = mode
-      state.rulesetId.value = rulesetId
+      state.rulesetId.value = effectiveRuleset
       state.tableThemeName.value = tableThemeName
       state.roomSeats.value = [{ seat: 0, peerId: created.peerId, nickname: state.nickname.value, avatar: state.avatar.value, ready: false }]
       state.aiSeats.value = []

@@ -187,7 +187,7 @@ function isSnapshot(message: JsonObject): boolean {
   return isString(message.roomId)
     && isSnapshotAuthorityMeta(message)
     && isString(message.mode) && MATCH_TYPES.has(message.mode)
-    && isOptional(message.rulesetId, (value) => value === 'lotus-classic' || value === 'lotus-legacy')
+    && isOptional(message.rulesetId, (value) => value === 'lotus-classic' || value === 'lotus-legacy' || value === 'congyang')
     && isString(message.phase) && GAME_PHASES.has(message.phase as GamePhase)
     && isPositiveInteger(message.round) && isSeat(message.dealer) && isIntegerAtLeast(message.honba, 0)
     && isOptional(message.dice, isDice)
@@ -240,7 +240,7 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
           && isString(raw.authorityEpoch)
           && isPositiveInteger(raw.sequence)
           && isString(raw.mode) && MATCH_TYPES.has(raw.mode)
-          && isOptional(raw.rulesetId, (value) => value === 'lotus-classic' || value === 'lotus-legacy')
+          && isOptional(raw.rulesetId, (value) => value === 'lotus-classic' || value === 'lotus-legacy' || value === 'congyang')
           && isPositiveInteger(raw.round) && isIntegerAtLeast(raw.honba, 0) && isSeat(raw.dealer)
           && isRoundResult(raw.result)
           && isNullable(raw.winPresentation, isWinPresentation)
@@ -250,7 +250,7 @@ export function decodeServerMessage(raw: unknown): ServerMessage | null {
       case 'rejoin_ok':
         return isSeat(raw.seat) && isBoolean(raw.rejoin) && isString(raw.roomId)
           && isString(raw.mode) && MATCH_TYPES.has(raw.mode)
-          && isOptional(raw.rulesetId, (value) => value === 'lotus-classic' || value === 'lotus-legacy')
+          && isOptional(raw.rulesetId, (value) => value === 'lotus-classic' || value === 'lotus-legacy' || value === 'congyang')
           && isString(raw.nickname) && isString(raw.rejoinCode)
           && isString(raw.authorityEpoch)
       case 'rejoin_err':
