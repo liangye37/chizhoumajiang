@@ -1361,9 +1361,7 @@ export function useVibeRemoteGame({
   const remoteUserHasWindKong = computed(() => isHost.value
     ? (hostGame.value?.game.capabilities.value.windKong?.available ?? false)
     : turnCanWindKong.value)
-  const windName = computed(() => (round.value > 4 ? '南' : '东'))
-  const handNumber = computed(() => ((round.value - 1) % 4) + 1)
-  const roundLabel = computed(() => `${windName.value}${handNumber.value}局`)
+  const roundLabel = computed(() => `第${round.value}局`)
   const matchName = computed(() => MATCH_NAMES[matchType.value])
   const standings = computed(() => rankVibeMatchStandings(players
     .map((player, playerIndex) => ({ ...player, playerIndex }))))

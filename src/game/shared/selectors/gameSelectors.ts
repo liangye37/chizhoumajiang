@@ -19,9 +19,7 @@ export function createCommonGameSelectors(state: CommonSelectorState, matchNames
   const user = computed(() => state.players[0])
   const isUserTurn = computed(() => state.currentPlayer.value === 0 && state.phase.value === 'discard')
   const wallCount = computed(() => state.wall.value.length)
-  const windName = computed(() => (state.round.value > 4 ? '南' : '东'))
-  const handNumber = computed(() => ((state.round.value - 1) % 4) + 1)
-  const roundLabel = computed(() => `${windName.value}${handNumber.value}局`)
+  const roundLabel = computed(() => `第${state.round.value}局`)
   const matchName = computed(() => matchNames[state.matchType.value])
   const standings = computed(() => state.players
     .map((player, index) => ({ ...player, playerIndex: index }))
