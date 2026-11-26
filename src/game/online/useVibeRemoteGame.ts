@@ -92,7 +92,7 @@ import type { TableThemeName } from '../../components/table/three/tableTheme'
 import { isTableThemeName } from '../../components/table/three/tableThemePreference'
 import type { AnimeFixedTtsExecutor, AnimeSeat } from '../llm/animeFixedTtsExecutor'
 
-const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' }
+const MATCH_NAMES = { east: '四局场', hanchan: '八局场' }
 // 必须严格大于房主的 REMOTE_REQUEST_TIMEOUT_MS（25000ms）：房主在等待远端响应时
 // 会跳过普通快照广播，若两侧同为 25s，客户端看门狗恰好在房主 AI 接管/恢复广播
 // 落地前开枪重进（「对局权威连续静默」每 ~60s 循环），新 peerId 又打乱续局确认，

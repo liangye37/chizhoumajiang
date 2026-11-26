@@ -360,7 +360,12 @@ export function createOpeningTimeline({
       state.wallCount.value = openingSnapshot?.rulesetId === 'lotus-legacy'
         ? WALL_TOTAL - 2
         : WALL_TOTAL
-      if (flipTileValue) announce(`翻精 ${tileName(flipTileValue)}`)
+      const jokers = openingSnapshot?.jokerTiles ?? []
+      if (flipTileValue) {
+        announce(jokers.length
+          ? `翻钻 ${tileName(flipTileValue)}，钻牌为 ${jokers.map(tileName).join('、')}`
+          : `翻钻 ${tileName(flipTileValue)}`)
+      }
       await wait(1200)
       if (currentSequence !== sequence) return
     }

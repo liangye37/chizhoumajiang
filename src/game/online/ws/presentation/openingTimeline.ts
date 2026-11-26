@@ -249,7 +249,7 @@ export function createOpeningTimeline({
       state.openingStage.value = 'flip'
       state.flipTile.value = flipTileValue
       state.flipStack.value = flipStackValue
-      if (flipTileValue) announce(`翻精 ${tileName(flipTileValue)}`)
+      if (flipTileValue) announce(`翻钻 ${tileName(flipTileValue)}`)
       await wait(1200)
       if (currentSequence !== sequence) return
     }

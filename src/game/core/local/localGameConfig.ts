@@ -8,7 +8,7 @@ export const PLAYER_SEED = [
 ]
 
 export const MATCH_HANDS = { east: 4, hanchan: 8 } as const
-export const MATCH_NAMES = { east: '东风场', hanchan: '半庄场' } as const
+export const MATCH_NAMES = { east: '四局场', hanchan: '八局场' } as const
 
 // 视觉节奏延迟（非 AI 思考，用于动作动画展示与牌桌节奏）。
 export const PACE_MS = {
