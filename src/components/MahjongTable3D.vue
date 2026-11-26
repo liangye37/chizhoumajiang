@@ -41,6 +41,7 @@ const props = withDefaults(defineProps<TableProps>(), {
   dealAnimation: () => ({ playerIndex: -1, count: 0, serial: 0 }),
   openingStage: null, diceValues: () => [1, 1], dealerIndex: 0, diceThrowerIndex: 0,
   tableActionEvent: null,
+  tingHintEnabled: false,
 })
 const emit = defineEmits<{
   ready: []
@@ -93,9 +94,9 @@ const WALL_DEAL_ORIGIN_Y = 1.1  // 发牌从牌山 head 槽位上方起飞的初
 // 触屏设备（真机）判定：主指针 coarse 且无 hover。
 const isMobileLike = typeof window.matchMedia === 'function'
   && window.matchMedia('(hover: none) and (pointer: coarse)').matches
-// 渲染分辨率上限（清晰度 vs 帧率）：桌面 3、真机 2.5（在 2 的清晰与 3 的帧率间取平衡）。
+// 渲染分辨率上限（清晰度 vs 帧率）：桌面与真机均默认上限 2，避免高 DPI 下片元过载引发掉帧；
 // URL 带 ?pr=<数字> 可覆盖。
-let pixelRatioCap = parseFloat(new URLSearchParams(window.location.search).get('pr') ?? '') || (isMobileLike ? 2.5 : 3)
+let pixelRatioCap = parseFloat(new URLSearchParams(window.location.search).get('pr') ?? '') || 2
 
 // 抗锯齿：默认开（二次元渲染已足够轻，真机也能扛）；?aa=off 可关。
 const aaEnabled = new URLSearchParams(window.location.search).get('aa') !== 'off'
@@ -218,7 +219,15 @@ function makeTableTile(topMaterial) {
   return tile
 }
 
-function makeFaceTile(tileName) {
+function substitutedRedFace(): TileType | null {
+  return props.tingHintEnabled && props.jokerTiles?.length && !props.jokerTiles.includes('red')
+    ? props.jokerTiles[0]
+    : null
+}
+
+function makeFaceTile(tileName: TileType) {
+  const redSub = tileName === 'red' ? substitutedRedFace() : null
+  if (redSub) return makeTableTile(tableScene.makeFaceMaterial(redSub, 'zhong'))
   const marker = tileMarkerFor(tileName, props.jokerTiles, props.wildcardTiles)
   return makeTableTile(tableScene.makeFaceMaterial(tileName, marker))
 }
@@ -520,6 +529,11 @@ onMounted(async () => {
     getJokerAtlasMaterial: tableScene.getJokerAtlasMaterial,
     getWildcardAtlasMaterial: tableScene.getWildcardAtlasMaterial,
     getLaiziAtlasMaterial: tableScene.getLaiziAtlasMaterial,
+    getZhongAtlasMaterial: tableScene.getZhongAtlasMaterial,
+    resolveFace: (tile) => {
+      const redSub = tile === 'red' ? substitutedRedFace() : null
+      return redSub ? { face: redSub, isZhong: true } : { face: tile, isZhong: false }
+    },
     isJoker: (tile) => tileMarkerFor(tile, props.jokerTiles, props.wildcardTiles) === 'joker',
     isWildcard: (tile) => tileMarkerFor(tile, props.jokerTiles, props.wildcardTiles) === 'wildcard',
     isLaizi: (tile) => tileMarkerFor(tile, props.jokerTiles, props.wildcardTiles) === 'laizi',
@@ -619,6 +633,8 @@ onMounted(async () => {
   }
 })
 
+let hadOverlayMeshes = false
+
 watch(
   () => (props.players.map((player) => [
     player.hand.length,
@@ -644,6 +660,7 @@ watch(
     props.flipStack,
     props.flipTile,
     props.wallBreakIndex,
+    props.tingHintEnabled,
     props.bloodFlowBatches?.map(b => b.batchId).join(','),
     props.bloodFlowCompact,
     props.bloodFlowPresentationKey,
@@ -655,10 +672,14 @@ watch(
     props.bloodFlowOwnDraw?.y,
     props.localSeat,
   ),
-  // 发牌批次只刷新已有实例的 count / matrix / UV，避免每 150-260ms
-  // 销毁并重建整套 InstancedMesh 与 GPU buffer。
+  // 常规对局（发牌、翻钻、摸牌、出牌、发财补牌、碰杠吃跑风）一律复用已有 InstancedMesh 与 GPU buffer，
+  // 仅在胡牌特效 / 亮牌 / 买马进出时完整重建，消除每次出牌/补牌的 GPU 缓冲重建卡顿。
   () => {
-    tableTiles?.rebuild({ reuseInstances: props.openingStage === 'deal' })
+    const hasOverlayMeshes = Boolean(
+      props.revealHands || props.winEffect || props.winPresentation || props.horses?.length,
+    )
+    tableTiles?.rebuild({ reuseInstances: !hasOverlayMeshes && !hadOverlayMeshes })
+    hadOverlayMeshes = hasOverlayMeshes
     bloodFlowWinEffects?.sync()
     invalidate()
   },

@@ -16,13 +16,29 @@ const props = withDefaults(defineProps<{
   jokerTiles?: TileType[]
   /** 可替代精牌的实体牌；不参与精牌排序。 */
   wildcardTiles?: TileType[]
-}>(), { tile: 'back', hidden: false, selected: false, drawn: false, disabled: false, small: false })
+  /** 开启听牌提示时，将非真钻的红中直接替换为本局钻牌牌面并标「中」。 */
+  replaceRedWithJoker?: boolean
+}>(), { tile: 'back', hidden: false, selected: false, drawn: false, disabled: false, small: false, replaceRedWithJoker: false })
 
 const emit = defineEmits(['choose'])
 const choose = (event?: Event) => {
   if (!props.disabled) emit('choose', event)
 }
-const shownTile = computed(() => (props.hidden ? 'back' : props.tile))
+const isRedSubstituted = computed(() => (
+  Boolean(
+    props.replaceRedWithJoker
+    && props.tile === 'red'
+    && props.jokerTiles?.length
+    && !props.jokerTiles.includes('red'),
+  )
+))
+const shownTile = computed(() => (
+  props.hidden
+    ? 'back'
+    : isRedSubstituted.value
+      ? props.jokerTiles![0]
+      : props.tile
+))
 const meta = computed(() => TILE_META[shownTile.value] || TILE_META.back)
 const isPrecision = computed(() => (
   props.tile !== 'back'
@@ -49,13 +65,22 @@ const isLaizi = computed(() => (
   && props.tile === 'white'
   && Boolean(props.jokerTiles?.includes(props.tile))
 ))
-const isJoker = computed(() => isPrecision.value || isWhiteJoker.value || isWildcard.value || isLaizi.value)
-// 标记按身份区分：真精牌/白板翻精标「钻」，替身（可代本局钻牌）标「替」，广麻白板癞子标「癞」。
+const isJoker = computed(() => isPrecision.value || isWhiteJoker.value || isWildcard.value || isLaizi.value || isRedSubstituted.value)
+// 标记按身份区分：真钻牌标「钻」，听牌提示替换的红中标「中」，其余替身标「替」，白板癞子标「癞」。
 const tileMarker = computed(() => (
-  isPrecision.value || isWhiteJoker.value ? '钻' : isWildcard.value ? '替' : isLaizi.value ? '癞' : ''
+  isPrecision.value || isWhiteJoker.value
+    ? '钻'
+    : isRedSubstituted.value
+      ? '中'
+      : isWildcard.value
+        ? '替'
+        : isLaizi.value
+          ? '癞'
+          : ''
 ))
 const tileLabel = computed(() => {
   if (!isJoker.value || shownTile.value === 'back') return meta.value.name
+  if (isRedSubstituted.value) return `红中（替${meta.value.name}）`
   const role = isPrecision.value || isWhiteJoker.value ? '钻牌' : isLaizi.value ? '癞子' : '万能牌'
   return `${meta.value.name}，${role}${isWildcard.value ? '，可代本局钻牌' : ''}`
 })
@@ -71,7 +96,7 @@ const tileStyle = computed(() => {
 <template>
   <div
     class="mahjong-tile"
-    :class="{ selected, drawn, disabled, small, 'tile-back': shownTile === 'back', joker: (isPrecision || isWhiteJoker) && !hidden, wildcard: isWildcard && !hidden, laizi: isLaizi && !hidden, red: tile === 'red' && !hidden }"
+    :class="{ selected, drawn, disabled, small, 'tile-back': shownTile === 'back', joker: (isPrecision || isWhiteJoker) && !hidden, wildcard: (isWildcard || isRedSubstituted) && !hidden, laizi: isLaizi && !hidden, red: tile === 'red' && !isRedSubstituted && !hidden }"
     :style="tileStyle"
     role="button"
     :aria-label="tileLabel"

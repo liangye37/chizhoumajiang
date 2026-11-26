@@ -2,7 +2,7 @@
 import { computed, ref, useId, watch } from 'vue'
 import { BASE_SCORE } from '../game/core/rules/rules'
 import { DISCLAIMER_SECTIONS, DISCLAIMER_TITLE } from '../content/disclaimer'
-import { congyangRules, gameRules, windKongDescription } from '../content/gameRules'
+import { congyangRules, gameRules } from '../content/gameRules'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from '../game/core/rules/ruleVariants'
 import TableControlIcon from './table/TableControlIcon.vue'
 
@@ -51,13 +51,12 @@ const rules = computed(() => {
   return [
     ['多端兼容', '电脑端：鼠标单击出牌、移动端：手机双击出牌或上滑出牌'],
     ['翻钻癞子', '骰子翻出指示牌，其同序下一张为钻牌（万能牌），可代替任意牌完成对子、刻子或顺子。'],
-    ['只碰不吃', '可以碰牌、明杠、暗杠、补杠与风杠，不能吃牌。操作优先级：胡 > 杠 > 碰 > 过。'],
-    ['红中替代', '红中是本局替代牌：可当作任意钻牌面参与成牌；钻牌未翻出红中时，红中还可当作三万使用。'],
+    ['只碰不吃', '可以碰牌、明杠、暗杠与补杠，不能吃牌；东南西北风不可成顺也不可风杠放倒。操作优先级：胡 > 杠 > 碰 > 过。'],
+    ['红中替代', '红中是本局替代牌（非真钻时），可当作本局钻牌面参与成牌。'],
     ['发财摸尾', '发财（非钻牌时）摸到或打出后直接放置在手牌旁边，并从牌墙另一端（与正常摸牌方向相反）补摸一张。'],
     ['胡牌牌型', '平胡、七对子、十三烂、七星十三烂、十三幺等特殊牌型按完整副露与胡牌张重新判型。'],
     ['胡牌来源', '仅支持自摸胡与抢杠胡，不支持点炮胡；听任意（单吊钻牌）时只能自摸，不可抢杠胡。'],
-    ['面子规则', '钻牌可补缺张、做将；红中按替代牌参与判定；发财作为钻牌时可按普通牌面/钻牌参与。'],
-    ['风杠', windKongDescription],
+    ['面子规则', '钻牌可补缺张、做将；红中按替代牌参与判定；发财作为钻牌时可按普通牌面/钻牌参与；东南西北风仅可作刻子或将牌。'],
     ['跑风规则', '完成 3+3+3+3+2 标准牌型且将牌对子含真钻牌（红中非钻时不计）时，可将对子亮出放手牌前发动跑风并轮转一圈。轮转中他家可碰杠但跑风者不可；轮回跑风者则成功（暂双倍）；期间他家自摸/抢杠为「捉」，跑风者包赔三倍给捉胡者；摸空流局按正常流局。'],
     ['收付方式', '每次胡牌，另外三家都分别向胡家付款；普通吃胡时，点炮者把自己那一笔再付双倍。自摸、抢杠不对某一付款者单独双付。'],
     ['起始分数', '每位玩家起始 2000 分，基础结算单位 100。'],

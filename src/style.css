@@ -3868,3 +3868,278 @@ button { font: inherit; }
   .game-app .final-board { width: min(780px, 94%); }
   .final-rankings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ── 操作按钮徽章美化：胡 / 碰 / 杠 / 吃 / 跑风 / 过 ── */
+.game-app .game-table-hud .action-bar {
+  gap: 11px;
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 64px;
+  min-width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 2px solid rgba(235, 198, 118, .82);
+  border-radius: 50%;
+  overflow: hidden;
+  isolation: isolate;
+  transition: transform .16s cubic-bezier(.22, 1, .36, 1), filter .16s ease, box-shadow .16s ease;
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 236, 184, .44);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 46% 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, .04) 70%, transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge b {
+  position: relative;
+  z-index: 2;
+  font: 900 clamp(24px, 2vw, 30px) "Noto Serif SC", "Songti SC", serif;
+  line-height: 1;
+  letter-spacing: .04em;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, .68), 0 0 10px rgba(255, 224, 146, .35);
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge:hover {
+  transform: translateY(-3px) scale(1.05);
+  filter: brightness(1.1);
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge:active {
+  transform: translateY(1px) scale(.96);
+  filter: brightness(.96);
+}
+
+/* 宽徽章：跑风 / 风杠 / 取消 */
+.game-app .game-table-hud .action-bar .action.action-badge.action-wide {
+  width: auto;
+  min-width: 98px;
+  height: 58px;
+  padding: 0 18px;
+  border-radius: 999px;
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge.action-wide b {
+  font-size: clamp(20px, 1.65vw, 24px);
+  letter-spacing: .08em;
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge .action-badge-icon {
+  position: relative;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .55));
+}
+
+/* 胡：朱砂描金大徽章 + 呼吸金光 */
+.game-app .game-table-hud .action-bar .action.action-badge.action-hu {
+  width: 72px;
+  min-width: 72px;
+  height: 72px;
+  border-color: #f8d278;
+  background: radial-gradient(circle at 36% 28%, #e85543 0%, #b52424 52%, #5e0d12 100%);
+  color: #fff3cc;
+  box-shadow:
+    0 8px 22px rgba(178, 28, 28, .58),
+    0 0 0 3px rgba(248, 210, 120, .24),
+    inset 0 -5px 10px rgba(42, 4, 6, .52);
+  animation: action-hu-pulse 1.9s ease-in-out infinite;
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge.action-hu::before {
+  border-color: rgba(255, 224, 138, .72);
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge.action-hu b {
+  font-size: clamp(28px, 2.3vw, 34px);
+  text-shadow: 0 2px 5px rgba(58, 4, 6, .88), 0 0 14px rgba(255, 214, 102, .68);
+}
+
+/* 碰：琥珀鎏金 */
+.game-app .game-table-hud .action-bar .action.action-badge.action-peng {
+  border-color: #f0c96d;
+  background: radial-gradient(circle at 36% 28%, #d99534 0%, #9b5b16 56%, #4f2a08 100%);
+  color: #fff6dc;
+  box-shadow:
+    0 7px 18px rgba(124, 68, 12, .52),
+    0 0 0 2px rgba(240, 201, 109, .18),
+    inset 0 -5px 10px rgba(42, 20, 4, .5);
+}
+
+/* 杠 / 风杠：靛蓝嵌金 */
+.game-app .game-table-hud .action-bar .action.action-badge.action-gang {
+  border-color: #93d0ff;
+  background: radial-gradient(circle at 36% 28%, #3576c9 0%, #1d4484 56%, #0d1f44 100%);
+  color: #eef8ff;
+  box-shadow:
+    0 7px 18px rgba(21, 58, 118, .54),
+    0 0 0 2px rgba(147, 208, 255, .2),
+    inset 0 -5px 10px rgba(6, 16, 38, .54);
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge.action-gang::before {
+  border-color: rgba(186, 227, 255, .48);
+}
+
+/* 吃：翠玉镶金 */
+.game-app .game-table-hud .action-bar .action.action-badge.action-chi {
+  border-color: #9be0b5;
+  background: radial-gradient(circle at 36% 28%, #2e9c67 0%, #176642 56%, #0b3623 100%);
+  color: #f1fff6;
+  box-shadow:
+    0 7px 18px rgba(16, 86, 54, .5),
+    0 0 0 2px rgba(155, 224, 181, .18),
+    inset 0 -5px 10px rgba(5, 26, 16, .5);
+}
+
+/* 跑风：青玉疾风 + 鎏金微光 */
+.game-app .game-table-hud .action-bar .action.action-badge.action-paofeng {
+  border-color: #f4d685;
+  background: linear-gradient(135deg, #1b8f82 0%, #0e6362 52%, #083b40 100%);
+  color: #fff7dc;
+  box-shadow:
+    0 8px 22px rgba(10, 108, 104, .54),
+    0 0 0 3px rgba(244, 214, 133, .22),
+    inset 0 -4px 10px rgba(4, 28, 30, .52);
+  animation: action-paofeng-glow 2.2s ease-in-out infinite;
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge.action-paofeng::before {
+  border-color: rgba(168, 245, 232, .52);
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge.action-paofeng .action-badge-icon {
+  color: #b7fff2;
+}
+
+/* 过：玄石静过（低调不抢焦） */
+.game-app .game-table-hud .action-bar .action.action-badge.action-pass {
+  width: auto;
+  min-width: 56px;
+  height: 46px;
+  padding: 0 16px;
+  border-width: 1px;
+  border-color: rgba(168, 188, 178, .42);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(36, 48, 43, .9), rgba(14, 22, 19, .94));
+  color: #d0dbd5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .42), inset 0 1px rgba(255, 255, 255, .12);
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge.action-pass::before {
+  inset: 3px;
+  border-color: rgba(255, 255, 255, .1);
+}
+
+.game-app .game-table-hud .action-bar .action.action-badge.action-pass b {
+  font-size: clamp(16px, 1.35vw, 19px);
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .7);
+}
+
+@keyframes action-hu-pulse {
+  0%, 100% {
+    box-shadow:
+      0 8px 22px rgba(178, 28, 28, .58),
+      0 0 0 3px rgba(248, 210, 120, .24),
+      inset 0 -5px 10px rgba(42, 4, 6, .52);
+  }
+  50% {
+    box-shadow:
+      0 10px 28px rgba(226, 48, 42, .72),
+      0 0 0 6px rgba(248, 210, 120, .42),
+      inset 0 -5px 10px rgba(42, 4, 6, .46);
+  }
+}
+
+@keyframes action-paofeng-glow {
+  0%, 100% {
+    box-shadow:
+      0 8px 22px rgba(10, 108, 104, .54),
+      0 0 0 3px rgba(244, 214, 133, .22),
+      inset 0 -4px 10px rgba(4, 28, 30, .52);
+  }
+  50% {
+    box-shadow:
+      0 10px 26px rgba(24, 168, 152, .66),
+      0 0 0 5px rgba(154, 245, 228, .36),
+      inset 0 -4px 10px rgba(4, 28, 30, .46);
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .game-app .game-table-hud .action-bar .action.action-badge {
+    width: 54px;
+    min-width: 54px;
+    height: 54px;
+    padding: 0;
+  }
+  .game-app .game-table-hud .action-bar .action.action-badge.action-hu {
+    width: 60px;
+    min-width: 60px;
+    height: 60px;
+  }
+  .game-app .game-table-hud .action-bar .action.action-badge.action-wide {
+    width: auto;
+    min-width: 84px;
+    height: 50px;
+    padding: 0 14px;
+  }
+  .game-app .game-table-hud .action-bar .action.action-badge.action-pass {
+    width: auto;
+    min-width: 48px;
+    height: 44px;
+    padding: 0 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-app .game-table-hud .action-bar .action.action-badge.action-hu,
+  .game-app .game-table-hud .action-bar .action.action-badge.action-paofeng {
+    animation: none;
+  }
+}
+
+/* 本家摸牌 / 补牌落位缓动，衔接 3D 牌尾飞牌动画避免闪现 */
+.hand-rack .hand-tile-slot.drawn {
+  animation: drawn-tile-arrive .24s cubic-bezier(.22, 1, .36, 1) both;
+}
+
+@keyframes drawn-tile-arrive {
+  from {
+    opacity: .22;
+    transform: translateY(-16px) scale(.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hand-rack .hand-tile-slot.drawn {
+    animation: none;
+  }
+}

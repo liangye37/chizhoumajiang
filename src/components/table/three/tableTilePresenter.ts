@@ -40,6 +40,15 @@ interface MeldTween extends InstanceTween {
   extraY?: number
 }
 
+interface DrawTween extends InstanceTween {
+  origin: THREE.Vector3
+  target: THREE.Vector3
+  originQuat: THREE.Quaternion
+  targetQuat: THREE.Quaternion
+  arcHeight: number
+  hideOnComplete?: boolean
+}
+
 interface TableTilePresenterOptions {
   projectOwnDraw?(point:{x:number;y:number}):THREE.Vector3|null
   props: Readonly<ResolvedTableProps>
@@ -70,9 +79,17 @@ export function createTableTilePresenter(options: TableTilePresenterOptions) {
   const dealTweens: DealTween[] = []
   const meldTweens: MeldTween[] = []
   const discardTweens: DealTween[] = []
+  const drawTweens: DrawTween[] = []
   let continuingDeals = new Map<string, DealTween>()
   let continuingMelds = new Map<string, MeldTween>()
   let continuingDiscards = new Map<string, DealTween>()
+  let continuingDraws = new Map<string, DrawTween>()
+  const scratchQuat = new THREE.Quaternion()
+  const seenGreenCounts = [0, 0, 0, 0]
+  let hasObservedGreenState = false
+  let prevTailDrawnCount: number | null = null
+  let tailDrawSerial = 0
+  let pendingTailDraw: { playerIndex: number; origin: THREE.Vector3; originQuat: THREE.Quaternion; serial: number } | null = null
   let animatedDealSerial = -1
   let pendingDealAnimation = false
   let animatedFlipKey: string | null = null
@@ -83,6 +100,7 @@ export function createTableTilePresenter(options: TableTilePresenterOptions) {
   let animatedDiscardId = -1
   let animatedTableActionId = -1
   let pendingTableActionAnimation: TableActionEvent | null = null
+  let highlightMarker: THREE.Mesh | null = null
   const beginTableInstances = tileInstances.begin
   const addTableTile = tileInstances.add
   const finishTableInstances = tileInstances.finish
@@ -185,6 +203,9 @@ function addConcealedHand(playerIndex) {
     if (!props.revealHands) quat.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)))
     const motionKey = `deal:${props.dealAnimation.serial}:${playerIndex}:${index}`
     const continuing = continuingDeals.get(motionKey)
+    const tailMotionKey = `tail-draw:${playerIndex}:${tailDrawSerial}`
+    const continuingTailDraw = index === layoutDrawnTileIndex ? continuingDraws.get(tailMotionKey) : undefined
+    const isNewTailDraw = index === layoutDrawnTileIndex && pendingTailDraw?.playerIndex === playerIndex
     if (dealThisHand && index >= animatedFromIndex && (pendingDealAnimation || continuing)) {
       // 发牌从牌山 head 槽位（下一张要摸的牌所在处）飞出，而不是从中控台上方。
       const head = wallDrawHeadPos()
@@ -200,6 +221,24 @@ function addConcealedHand(playerIndex) {
         quat,
         startedAt: continuing?.startedAt ?? performance.now(),
         duration: props.dealAnimation.count === 4 ? 230 : 125,
+      })
+    } else if (isNewTailDraw || continuingTailDraw) {
+      const origin = continuingTailDraw?.origin ?? pendingTailDraw!.origin.clone()
+      const originQuat = continuingTailDraw?.originQuat ?? pendingTailDraw!.originQuat.clone()
+      const inst = addTableTile(pos, originQuat, face, 1, origin)
+      drawTweens.push({
+        motionKey: tailMotionKey,
+        baseIndex: inst.baseIndex,
+        capIndex: inst.capIndex,
+        capMesh: inst.capMesh,
+        origin,
+        target: pos.clone(),
+        originQuat,
+        targetQuat: quat.clone(),
+        quat,
+        arcHeight: 1.25,
+        startedAt: continuingTailDraw?.startedAt ?? performance.now(),
+        duration: 380,
       })
     } else {
       const instance = addTableTile(pos, quat, face)
@@ -257,16 +296,19 @@ function addDiscards(playerIndex) {
       addTableTile(pos, quat, tileName)
     }
     if (highlighted) {
-      // 最新一张弃牌的高亮垫片保持独立 mesh（仅 1 张，无需合批）。
-      const marker = new THREE.Mesh(
-        ownDynamic(new RoundedBoxGeometry(.76, .045, 1.02, 2, .02)),
-        scene.userData.highlightMaterial,
-      )
-      marker.position.set(transform.x, y - .205, transform.z + PLAY_AREA_OFFSET_Z)
-      marker.rotation.y = transform.rotation
-      marker.receiveShadow = true
-      scene.add(marker)
-      dynamicGroups.push(marker)
+      // 最新一张弃牌的高亮垫片复用单个持久化 mesh，避免每次出牌重建几何体与清空场景。
+      if (!highlightMarker || highlightMarker.parent !== scene) {
+        highlightMarker = new THREE.Mesh(
+          ownDynamic(new RoundedBoxGeometry(.76, .045, 1.02, 2, .02)),
+          scene.userData.highlightMaterial,
+        )
+        highlightMarker.receiveShadow = true
+        scene.add(highlightMarker)
+        dynamicGroups.push(highlightMarker)
+      }
+      highlightMarker.visible = true
+      highlightMarker.position.set(transform.x, y - .205, transform.z + PLAY_AREA_OFFSET_Z)
+      highlightMarker.rotation.y = transform.rotation
     }
   })
 }
@@ -274,14 +316,67 @@ function addDiscards(playerIndex) {
 function addGreenDiscards() {
   const players = props.players ?? []
   for (let playerIndex = 0; playerIndex < players.length && playerIndex < 4; playerIndex += 1) {
-    ;(players[playerIndex]?.greenDiscards ?? []).forEach((tile, index) => {
+    const greens = players[playerIndex]?.greenDiscards ?? []
+    if (!hasObservedGreenState || greens.length < seenGreenCounts[playerIndex]) {
+      seenGreenCounts[playerIndex] = greens.length
+    }
+    greens.forEach((tile, index) => {
       if (index >= 12) return
       const transform = greenDiscardTileLayout(playerIndex, index)
       const pos = new THREE.Vector3(transform.x, .28, transform.z + TILE_LAYER_Z)
       const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, transform.rotation, 0))
-      addTableTile(pos, quat, tile)
+      const motionKey = `green-discard:${playerIndex}:${index}:${tile}`
+      const continuing = continuingDiscards.get(motionKey)
+      const isNewGreen = hasObservedGreenState && index >= seenGreenCounts[playerIndex]
+      if (isNewGreen || continuing) {
+        const origin = continuing?.origin ?? discardSourcePos(playerIndex)
+        const inst = addTableTile(pos, quat, tile, 1, origin)
+        discardTweens.push({
+          motionKey,
+          baseIndex: inst.baseIndex,
+          capIndex: inst.capIndex,
+          capMesh: inst.capMesh,
+          origin,
+          target: pos.clone(),
+          quat,
+          startedAt: continuing?.startedAt ?? performance.now(),
+          duration: 340,
+        })
+      } else {
+        addTableTile(pos, quat, tile)
+      }
     })
+    seenGreenCounts[playerIndex] = greens.length
   }
+  hasObservedGreenState = true
+}
+
+/** 牌尾补摸（发财补牌 / 杠后补牌）时，本家 2D 手牌无 3D 暗手，用一张背面 3D 牌从牌尾飞向本家右手边。 */
+function addHumanTailDrawFlight() {
+  const motionKey = `tail-draw:0:${tailDrawSerial}`
+  const continuing = continuingDraws.get(motionKey)
+  const isNew = pendingTailDraw?.playerIndex === 0
+  if (!isNew && !continuing) return
+  const origin = continuing?.origin ?? pendingTailDraw!.origin.clone()
+  const originQuat = continuing?.originQuat ?? pendingTailDraw!.originQuat.clone()
+  const target = new THREE.Vector3(4.2, 1.45, 9.4)
+  const targetQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2.6, 0, 0))
+  const inst = addTableTile(target, originQuat, null, 1, origin)
+  drawTweens.push({
+    motionKey,
+    baseIndex: inst.baseIndex,
+    capIndex: inst.capIndex,
+    capMesh: inst.capMesh,
+    origin,
+    target,
+    originQuat,
+    targetQuat,
+    quat: targetQuat,
+    arcHeight: 1.4,
+    hideOnComplete: true,
+    startedAt: continuing?.startedAt ?? performance.now(),
+    duration: 360,
+  })
 }
 
 function addPaofengTiles() {
@@ -451,6 +546,33 @@ function wallDrawHeadPos() {
   return { x: slot.x, z: slot.z }
 }
 
+function currentWallTailDrawn(): number {
+  const tiles = props.wall || []
+  if (!tiles.length) return 0
+  const initialSize = props.flipStack != null ? WALL_TOTAL - 2 : WALL_TOTAL
+  const headOffset = props.wallHeadDrawn ?? 0
+  return Math.max(0, initialSize - headOffset - tiles.length)
+}
+
+/** 刚从牌尾补走的那一张牌在牌山上的 3D 坐标与姿态，供补牌飞向手牌动画作起点。 */
+function wallDrawTailPose(prevTailDrawn: number) {
+  const tiles = props.wall || []
+  const breakIndex = resolveBreakIndex()
+  const headOffset = props.wallHeadDrawn ?? 0
+  const hasFlip = props.flipStack != null
+  const layer = prevTailDrawn % 2 === 0 ? 1 : 0
+  const physicalOffset = prevTailDrawn % 2 === 0 ? Math.max(0, tiles.length - 1) : tiles.length + 1
+  const physical = hasFlip
+    ? wallPhysicalIndex(headOffset + physicalOffset, breakIndex)
+    : (breakIndex + headOffset + physicalOffset) % WALL_TOTAL
+  const slot = wallStackSlot(Math.floor(physical / 2))
+  const origin = new THREE.Vector3(slot.x, .41 + layer * .47, slot.z)
+  const originQuat = new THREE.Quaternion()
+    .setFromEuler(new THREE.Euler(0, slot.rotationY, 0))
+    .multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0)))
+  return { origin, originQuat }
+}
+
 /**
  * 莲花麻将牌山张位映射：从 head 沿环推进 index 张，跳过翻精墩的 2 个物理张位，
  * 使翻精墩在环上留出空位（供指示牌翻出）。
@@ -617,15 +739,37 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
   continuingDeals = active(dealTweens)
   continuingMelds = active(meldTweens)
   continuingDiscards = active(discardTweens)
+  continuingDraws = active(drawTweens)
   pendingDealAnimation = props.dealAnimation.serial !== animatedDealSerial
   if (props.openingStage !== 'flip') animatedFlipKey = null
   if(epoch!==sourceEpoch){sourceEpoch=epoch;sourceTransforms.clear();ownDrawScreens.clear()}
+  const tailDrawn = currentWallTailDrawn()
+  if (
+    prevTailDrawnCount !== null
+    && tailDrawn > prevTailDrawnCount
+    && !props.revealHands
+    && props.openingStage == null
+  ) {
+    const drawer = props.currentPlayer >= 0 && props.currentPlayer < 4 ? props.currentPlayer : 0
+    const pose = wallDrawTailPose(tailDrawn - 1)
+    tailDrawSerial += 1
+    pendingTailDraw = { playerIndex: drawer, origin: pose.origin, originQuat: pose.originQuat, serial: tailDrawSerial }
+  } else {
+    pendingTailDraw = null
+  }
+  prevTailDrawnCount = (props.wall?.length ?? 0) > 0 ? tailDrawn : null
   drawnTransforms.clear();addedTransforms.clear();flights.length=0
   handFaceInstances.length = 0
-  if (!reuse) clearDynamicScene()
+  if (!reuse) {
+    clearDynamicScene()
+    highlightMarker = null
+  } else if (highlightMarker) {
+    highlightMarker.visible = false
+  }
   dealTweens.length = 0
   meldTweens.length = 0
   discardTweens.length = 0
+  drawTweens.length = 0
   pendingTableActionAnimation = props.tableActionEvent?.id !== animatedTableActionId
     ? props.tableActionEvent
     : null
@@ -639,6 +783,7 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
   addHorses()
   addGreenDiscards()
   addPaofengTiles()
+  addHumanTailDrawFlight()
   const liveSource=props.bloodFlowSourceEvent
   if(liveSource){
     const own=props.bloodFlowOwnDraw
@@ -668,7 +813,8 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
   // Sample the original timeline before this rebuilt frame is rendered, so the
   // tile neither snaps to its destination nor restarts from its origin.
   animate(now, new THREE.Vector3())
-  continuingDeals.clear(); continuingMelds.clear(); continuingDiscards.clear()
+  continuingDeals.clear(); continuingMelds.clear(); continuingDiscards.clear(); continuingDraws.clear()
+  pendingTailDraw = null
   if (pendingTableActionAnimation) animatedTableActionId = pendingTableActionAnimation.id
   pendingTableActionAnimation = null
   options.addWinEffect()
@@ -710,7 +856,22 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
       return progress < 1
     })
     discardTweens.splice(0, discardTweens.length, ...keepDiscard)
-    return dealTweens.length + meldTweens.length + discardTweens.length + flights.length > 0
+    const keepDraw = drawTweens.filter((tween) => {
+      const progress = Math.min(1, Math.max(0, (time - tween.startedAt) / tween.duration))
+      const eased = 1 - (1 - progress) ** 3
+      const arc = Math.sin(progress * Math.PI) * tween.arcHeight
+      scratchVector.lerpVectors(tween.origin, tween.target, eased)
+      scratchVector.y += arc
+      scratchQuat.slerpQuaternions(tween.originQuat, tween.targetQuat, eased)
+      const scale = tween.hideOnComplete
+        ? (progress >= 1 ? 0.0001 : (progress > .82 ? Math.max(.001, (1 - progress) / .18) : 1))
+        : 1
+      if (tween.hideOnComplete && progress >= 1) scratchVector.set(0, -20, 0)
+      tileInstances.set(tween.baseIndex, tween.capMesh, tween.capIndex, scratchVector, scratchQuat, scale)
+      return progress < 1
+    })
+    drawTweens.splice(0, drawTweens.length, ...keepDraw)
+    return dealTweens.length + meldTweens.length + discardTweens.length + drawTweens.length + flights.length > 0
   }
 
   return { rebuild: rebuildTableTiles, animate, meldTransform, alignMeldBottom, sourceTileRotationOffset,

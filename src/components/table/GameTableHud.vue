@@ -9,7 +9,7 @@ import type { TableChatBubble, TableEmoteCue } from './useTableInteractions'
 import type { TableInteraction } from '../../game/shared/tableInteractions'
 import { splitWinningTile } from '../../game/core/presentation/winEffect'
 import { defaultAvatarForSeat } from '../../game/core/presentation/avatar'
-import { tileName } from '../../game/core/rules/tiles'
+import { TILE_TYPES, tileName } from '../../game/core/rules/tiles'
 import type { ActionPrompt, Announcement, DealAnimation, GamePhase, LastDiscard, OpeningStage, RoundResult, WaitInfo, WinEffect } from '../../game/core/contracts/gamePort'
 import type { GamePlayer, ScoreFlowEvent, TableActionEvent, TileType, WinPresentation } from '../../game/core/contracts/types'
 import type { TableThemeName } from './three/tableTheme'
@@ -419,6 +419,32 @@ const userDrawnIndex = computed(() => {
   return hand.length > baseHand ? hand.length - 1 : -1
 })
 
+// 开启听牌提示时，将非真钻红中按本局钻牌面排入对应花色位置（摸牌位仍保留在最右侧）。
+const displayedHandEntries = computed(() => {
+  const hand = displayedUserHand.value
+  const drawn = userDrawnIndex.value
+  const entries = hand.map((tile, realIndex) => ({
+    tile,
+    realIndex,
+    isDrawn: drawn === realIndex,
+  }))
+  const joker = props.jokerTiles?.[0]
+  const shouldSubstituteRed = Boolean(props.tingHintEnabled && joker && !props.jokerTiles?.includes('red'))
+  if (!shouldSubstituteRed || !joker) return entries
+
+  const jokerSet = new Set(props.jokerTiles ?? [])
+  const jokerOrder = TILE_TYPES.indexOf(joker)
+  const sortKey = (tile: TileType) => {
+    if (jokerSet.has(tile)) return -100 + TILE_TYPES.indexOf(tile)
+    if (tile === 'red') return jokerOrder + 0.5
+    return TILE_TYPES.indexOf(tile)
+  }
+  const standing = entries.filter((entry) => !entry.isDrawn)
+  const drawnEntry = entries.find((entry) => entry.isDrawn)
+  standing.sort((a, b) => sortKey(a.tile) - sortKey(b.tile) || a.realIndex - b.realIndex)
+  return drawnEntry ? [...standing, drawnEntry] : standing
+})
+
 watch([userIdentity, handRack], ([identity, rack], _, onCleanup) => {
   if (!identity || !rack) return
   const measure = () => {
@@ -586,6 +612,7 @@ function onAvatarError(entry: GamePlayer) {
       :wall-break-index="wallBreakIndex"
       :flip-tile="flipTile"
       :flip-stack="flipStack"
+      :ting-hint-enabled="tingHintEnabled"
       :blood-flow-batches="bloodFlow?.batches"
       :blood-flow-compact="compactPiles"
       :blood-flow-presentation-key="bloodFlow?.presentationKey"
@@ -623,9 +650,8 @@ function onAvatarError(entry: GamePlayer) {
     </Transition>
     <Transition name="flip-cue">
       <div
-        v-if="flipTile" key="flip" class="flip-indicator" :class="{ 'flip-open': flipOpen }"
-        role="button" tabindex="0" aria-label="翻钻指示牌" :aria-expanded="flipOpen"
-        @click="flipOpen = !flipOpen" @keydown.enter="flipOpen = !flipOpen" @keydown.space.prevent="flipOpen = !flipOpen"
+        v-if="flipTile" key="flip" class="flip-indicator"
+        aria-label="翻钻与钻牌"
       >
         <div class="flip-indicator-head">
           <span>{{ bloodFlow ? '精' : '翻钻' }}</span>
@@ -633,25 +659,14 @@ function onAvatarError(entry: GamePlayer) {
             <MahjongTile v-for="tile in jokerTiles" :key="tile" :tile="tile" :joker-tiles="jokerTiles" :theme-name="themeName" small disabled />
           </template>
           <template v-else>
-            <MahjongTile :tile="flipTile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled />
+            <MahjongTile :tile="flipTile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :replace-red-with-joker="tingHintEnabled" :theme-name="themeName" small disabled />
             <em>{{ tileName(flipTile) }}</em>
             <template v-if="jokerTiles?.length">
               <span class="flip-joker-label">钻牌</span>
-              <MahjongTile v-for="tile in jokerTiles" :key="tile" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled />
+              <MahjongTile v-for="tile in jokerTiles" :key="tile" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :replace-red-with-joker="tingHintEnabled" :theme-name="themeName" small disabled />
               <em>{{ jokerTiles.map(tileName).join('、') }}</em>
             </template>
           </template>
-          <i class="flip-chevron" aria-hidden="true"></i>
-        </div>
-        <div class="flip-indicator-body">
-          <div v-if="secondDice" class="second-dice-note">
-            二骰 {{ secondDice[0] }} + {{ secondDice[1] }}
-          </div>
-          <div v-if="jokerGuide" class="joker-guide" role="note" aria-label="钻牌替代说明">
-            <div><strong>钻牌：</strong>{{ jokerGuide.precision }}</div>
-            <div><strong>红中替代：</strong>{{ jokerGuide.wildcard }}</div>
-            <div><strong>发财：</strong>摸到或打出后放在手牌旁，并从牌墙另一端补摸一张</div>
-          </div>
         </div>
       </div>
     </Transition>
@@ -725,16 +740,16 @@ function onAvatarError(entry: GamePlayer) {
     <section class="user-area">
       <div ref="handRack" class="hand-rack" :class="{ playable: isUserTurn, dealing: phase === 'dealing', 'has-melds': user.melds.length }">
         <div
-          v-for="(tile, index) in displayedUserHand" :key="`${tile}-${index}`" class="hand-tile-slot"
-          :class="{ drawn: userDrawnIndex === index, 'ting-discard': isTingDiscard(index, tile), 'reform-discard': isReformDiscard(index, tile) }"
-          @mouseenter="previewDesktopWaits(tile, index)" @mouseleave="clearDesktopWaits"
-          @pointerdown.stop="beginTileGesture(index, $event)" @pointerup.stop="finishTileGesture(index, $event)" @pointercancel="cancelTileGesture"
+          v-for="entry in displayedHandEntries" :key="`${entry.tile}-${entry.realIndex}`" class="hand-tile-slot"
+          :class="{ drawn: entry.isDrawn, 'ting-discard': isTingDiscard(entry.realIndex, entry.tile), 'reform-discard': isReformDiscard(entry.realIndex, entry.tile) }"
+          @mouseenter="previewDesktopWaits(entry.tile, entry.realIndex)" @mouseleave="clearDesktopWaits"
+          @pointerdown.stop="beginTileGesture(entry.realIndex, $event)" @pointerup.stop="finishTileGesture(entry.realIndex, $event)" @pointercancel="cancelTileGesture"
         >
           <span class="hand-hit-area" aria-hidden="true"></span>
-          <span v-if="tingHintEnabled && isTingDiscard(index, tile) && !isReformDiscard(index, tile)" class="ting-arrow" aria-hidden="true"></span>
-          <span v-if="tingHintEnabled && isReformDiscard(index, tile)" class="ting-arrow reform-arrow" aria-hidden="true"></span>
-          <span v-if="isReformDiscard(index, tile)" class="reform-badge" aria-hidden="true">改</span>
-          <MahjongTile :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :selected="selectedIndex === index" :drawn="userDrawnIndex === index" :disabled="!isUserTurn || Boolean(bloodFlow?.seats[user.seat].locked && index !== userDrawnIndex)" @choose="handleTileActivation(index, $event)" />
+          <span v-if="tingHintEnabled && isTingDiscard(entry.realIndex, entry.tile) && !isReformDiscard(entry.realIndex, entry.tile)" class="ting-arrow" aria-hidden="true"></span>
+          <span v-if="tingHintEnabled && isReformDiscard(entry.realIndex, entry.tile)" class="ting-arrow reform-arrow" aria-hidden="true"></span>
+          <span v-if="isReformDiscard(entry.realIndex, entry.tile)" class="reform-badge" aria-hidden="true">改</span>
+          <MahjongTile :tile="entry.tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :replace-red-with-joker="tingHintEnabled" :theme-name="themeName" :selected="selectedIndex === entry.realIndex" :drawn="entry.isDrawn" :disabled="!isUserTurn || Boolean(bloodFlow?.seats[user.seat].locked && entry.realIndex !== userDrawnIndex)" @choose="handleTileActivation(entry.realIndex, $event)" />
         </div>
       </div>
     </section>
@@ -751,32 +766,39 @@ function onAvatarError(entry: GamePlayer) {
             <TableControlIcon name="waits" />
           </button>
           <template v-if="actionPrompt?.type === 'claim'">
-            <button v-if="actionPrompt.canHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
-            <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.canPeng" class="action primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
-            <button v-if="actionPrompt.canGang" class="action primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
-            <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.chiOptions?.length" class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
-            <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked || (actionPrompt.canGang && !actionPrompt.canHu)" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+            <button v-if="actionPrompt.canHu" class="action action-badge action-hu hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
+            <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.canPeng" class="action action-badge action-peng primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
+            <button v-if="actionPrompt.canGang" class="action action-badge action-gang primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
+            <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.chiOptions?.length" class="action action-badge action-chi primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
+            <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked || (actionPrompt.canGang && !actionPrompt.canHu)" class="action action-badge action-pass pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
           </template>
           <template v-else-if="actionPrompt?.type === 'response'">
-            <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.canPeng" class="action primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
-            <button v-if="actionPrompt.canGang" class="action primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
-            <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.chiOptions?.length" class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
-            <button v-if="actionPrompt.canHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
-            <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked || (actionPrompt.canGang && !actionPrompt.canHu)" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+            <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.canPeng" class="action action-badge action-peng primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
+            <button v-if="actionPrompt.canGang" class="action action-badge action-gang primary" data-action-role="primary" @click="$emit('gangFromDiscard')"><b>杠</b></button>
+            <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.chiOptions?.length" class="action action-badge action-chi primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
+            <button v-if="actionPrompt.canHu" class="action action-badge action-hu hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
+            <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked || (actionPrompt.canGang && !actionPrompt.canHu)" class="action action-badge action-pass pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
           </template>
           <template v-else-if="actionPrompt?.type === 'rob' || actionPrompt?.type === 'hu'">
-            <button class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
-            <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+            <button class="action action-badge action-hu hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
+            <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked" class="action action-badge action-pass pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
           </template>
           <template v-else-if="actionPrompt?.type === 'chi'">
-            <button class="action primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
-            <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked" class="action pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
+            <button class="action action-badge action-chi primary" data-action-role="primary" @click="toggleChiPicker"><b>吃</b></button>
+            <button v-if="!bloodFlow || !bloodFlow.seats[user.seat].locked" class="action action-badge action-pass pass" data-action-role="danger" @click="$emit('pass')"><b>过</b></button>
           </template>
           <template v-else>
-            <button v-if="userKongs.length" class="action primary" data-action-role="primary" @click="toggleKongPicker"><b>{{ kongPickerOpen ? '取消' : '杠' }}</b></button>
-            <button v-if="userHasWindKong" class="action primary" data-action-role="primary" @click="$emit('windKong')"><b>风杠</b></button>
-            <button v-if="userCanPaofeng" class="action primary" data-action-role="major" @click="$emit('paofeng')"><b>跑风</b></button>
-            <button v-if="userCanHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
+            <button v-if="userKongs.length" class="action action-badge action-gang primary" :class="{ 'action-wide': kongPickerOpen }" data-action-role="primary" @click="toggleKongPicker"><b>{{ kongPickerOpen ? '取消' : '杠' }}</b></button>
+            <button v-if="userHasWindKong" class="action action-badge action-gang action-wide primary" data-action-role="primary" @click="$emit('windKong')"><b>风杠</b></button>
+            <button v-if="userCanPaofeng" class="action action-badge action-paofeng action-wide primary" data-action-role="major" @click="$emit('paofeng')">
+              <svg class="action-badge-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 9h11.5a3 3 0 1 0-2.6-4.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" />
+                <path d="M2 13.5h15.5a2.8 2.8 0 1 1-2.4 4.2" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" />
+                <path d="M5 18h6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".78" />
+              </svg>
+              <b>跑风</b>
+            </button>
+            <button v-if="userCanHu" class="action action-badge action-hu hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
           </template>
         </div>
         <div v-if="(isUserTurn || actionPrompt) && turnSeconds > 0" class="turn-timer" :class="{ 'prompt-timer': actionPrompt }"><span>{{ turnSeconds }}</span></div>
@@ -800,12 +822,12 @@ function onAvatarError(entry: GamePlayer) {
         </div>
       </div>
       <template v-else-if="activeWaits.any"><strong>听任意</strong><em v-if="rulesetId === 'congyang'">仅自摸</em><em>{{ activeWaits.remaining }}张</em></template>
-      <template v-else><div class="waiting-tiles"><div v-for="item in activeWaits.tiles" :key="item.tile"><MahjongTile :tile="item.tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled /><small>{{ item.remaining }}张</small></div></div></template>
+      <template v-else><div class="waiting-tiles"><div v-for="item in activeWaits.tiles" :key="item.tile"><MahjongTile :tile="item.tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :replace-red-with-joker="tingHintEnabled" :theme-name="themeName" small disabled /><small>{{ item.remaining }}张</small></div></div></template>
     </div>
 
     <Transition name="modal">
       <div v-if="kongPickerOpen && userKongs.length" class="result-backdrop kong-picker-backdrop" role="dialog" aria-modal="true" aria-labelledby="kong-picker-title" @click.self="kongPickerOpen = false">
-        <section class="result-card kong-picker-card"><h2 id="kong-picker-title">请选择想要杠的牌</h2><div class="kong-picker-tiles"><MahjongTile v-for="tile in userKongs" :key="tile" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" class="kong-picker-tile" @choose="chooseKong(tile)" /></div></section>
+        <section class="result-card kong-picker-card"><h2 id="kong-picker-title">请选择想要杠的牌</h2><div class="kong-picker-tiles"><MahjongTile v-for="tile in userKongs" :key="tile" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :replace-red-with-joker="tingHintEnabled" :theme-name="themeName" class="kong-picker-tile" @choose="chooseKong(tile)" /></div></section>
       </div>
     </Transition>
     <Transition name="modal">
@@ -814,7 +836,7 @@ function onAvatarError(entry: GamePlayer) {
           <h2 id="chi-picker-title">请选择吃牌组合</h2>
           <div class="kong-picker-tiles chi-picker-options">
             <button v-for="(option, chiIndex) in actionPrompt.chiOptions" :key="chiIndex" class="chi-picker-option" @click="chooseChi(chiIndex)">
-              <MahjongTile v-for="tile in option.tiles" :key="tile" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" small disabled />
+              <MahjongTile v-for="tile in option.tiles" :key="tile" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :replace-red-with-joker="tingHintEnabled" :theme-name="themeName" small disabled />
             </button>
           </div>
         </section>

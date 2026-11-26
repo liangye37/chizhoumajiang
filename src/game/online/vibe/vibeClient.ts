@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { getSelfHostConfig } from '../transport/selfHost/selfHostConfig'
 
 export interface VibeUser {
   id: string
@@ -50,12 +51,8 @@ export const vibeStatus = ref<VibeStatus>('idle')
 export const vibeError = ref('')
 export const vibeUser = ref<VibeUser | null>(null)
 
-/** 是否要求登录：仅生产域（且非本地开发）且尚未登录时为 true；本地开发保持匿名联机。 */
-export const loginRequired = computed(() => (
-  !import.meta.env.DEV
-  && isVibeHost
-  && !vibeUser.value
-))
+/** 局域网联机不需要平台账号登录。 */
+export const loginRequired = computed(() => false)
 
 let client: VibeHubSDK.Client | null = null
 let initPromise: Promise<VibeHubSDK.Client | null> | null = null
@@ -91,9 +88,16 @@ export async function initVibeHub(): Promise<VibeHubSDK.Client | null> {
     return Promise.resolve(null)
   }
   initPromise = (async () => {
-    // 本地开发默认用 mock（BroadcastChannel 模拟房间/对端），同浏览器双窗口即可联调全部
-    // 联机逻辑；VITE_VIBE_REAL=1 时改走真 SDK（真 WebRTC + 真中继），**但房间接口要求登录凭证**，
-    // 匿名进房在 SDK 层就被拒绝（见上方 useRealVibeSdk 注释）。生产构建不受影响（DEV=false 恒走真实 SDK）。
+    const selfHost = getSelfHostConfig()
+    if (selfHost) {
+      const { createSelfHostClient } = await import('../transport/selfHost/selfHostClient')
+      const selfClient = createSelfHostClient(selfHost)
+      client = selfClient
+      vibeUser.value = null
+      vibeStatus.value = 'ready'
+      return selfClient
+    }
+    // 本地开发回退到 mock（BroadcastChannel 模拟房间/对端），方便同浏览器双窗口联调与单元测试。
     if (import.meta.env.DEV && !useRealVibeSdk) {
       const { createMockVibeClient } = await import('./mockVibeHub')
       const mock = createMockVibeClient()
@@ -102,38 +106,9 @@ export async function initVibeHub(): Promise<VibeHubSDK.Client | null> {
       vibeStatus.value = 'ready'
       return mock
     }
-    if (!canInitVibeHub) {
-      vibeStatus.value = 'unavailable'
-      return null
-    }
-    vibeStatus.value = 'initializing'
-    try {
-      // 仅真实 SDK 路径需要平台脚本。第三方网络不应挡住启动页、单机或独立站。
-      if (!window.VibeHub) {
-        await new Promise<void>((resolve, reject) => {
-          const script = document.createElement('script')
-          script.src = VIBE_API_BASE + '/sdk/v3/vibehub.js'
-          script.onload = () => resolve()
-          script.onerror = () => reject(new Error('联机平台 SDK 加载失败'))
-          document.head.append(script)
-        })
-      }
-      // 生产域显式给 apiBase（SDK 默认值硬编码旧域名）；本地开发不给，走 SDK 的 location.origin → vite 代理。
-      const instance = await window.VibeHub.init(
-        isVibeHost ? { work: VIBE_WORK_SLUG, apiBase: VIBE_API_BASE } : { work: VIBE_WORK_SLUG },
-      )
-      client = instance
-      vibeUser.value = instance.user
-      stopWatching = instance.onAuthChange((user) => {
-        vibeUser.value = user ?? null
-      })
-      vibeStatus.value = 'ready'
-      return instance
-    } catch (error) {
-      vibeStatus.value = 'error'
-      vibeError.value = error instanceof Error ? error.message : String(error)
-      return null
-    }
+    // 仅保留局域网联机（selfHost），不再加载外部 VibeHub 平台 SDK。
+    vibeStatus.value = 'unavailable'
+    return null
   })()
   return initPromise
 }

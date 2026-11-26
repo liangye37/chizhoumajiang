@@ -89,14 +89,14 @@ export function discardTileLayout(seat:number,index:number) {
   return {...pointFromSeat(seat,lateral,depth),rotation:[0,Math.PI/2,Math.PI,-Math.PI/2][seat]}
 }
 
-/** 枞阳发财专用摆放区：每家手牌右/前侧外缘（与 D:\\chizhoumajiang 布局一致）。 */
+/** 池州发财专用摆放区：四角贴边区域（本家右下、下家右上、对家左上、上家左下），避开手牌、牌墙与副露。 */
 export function greenDiscardTileLayout(seat: number, index: number) {
   const row = Math.floor(index / 4)
   const col = index % 4
-  if (seat === 0) return { x: 7.6 + col * .78, z: 9.2 - row * .78, rotation: 0 }
-  if (seat === 1) return { x: 9.6 - row * .78, z: -6.4 + col * .78, rotation: Math.PI / 2 }
-  if (seat === 2) return { x: -5.8 - col * .78, z: -9.6 + row * .78, rotation: Math.PI }
-  return { x: -9.6 + row * .78, z: 6.4 - col * .78, rotation: -Math.PI / 2 }
+  if (seat === 0) return { x: 7.1 + col * .72, z: 9.05 - row * 1.0, rotation: 0 }
+  if (seat === 1) return { x: 9.3 - row * 1.0, z: -9.9 + col * .72, rotation: Math.PI / 2 }
+  if (seat === 2) return { x: -7.1 - col * .72, z: -9.95 + row * 1.0, rotation: Math.PI }
+  return { x: -9.3 + row * 1.0, z: 6.6 + col * .72, rotation: -Math.PI / 2 }
 }
 
 /** 跑风亮牌摆放区：放在手牌正前方，不进牌堆/牌河。 */

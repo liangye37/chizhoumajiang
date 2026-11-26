@@ -47,6 +47,8 @@ export interface TableProps {
   flipTile?: TileType | null
   /** 翻精所在物理墩（0..67），指示牌在牌山上的位置 */
   flipStack?: number
+  /** 开启听牌提示时，3D 牌面也将非真钻红中替换为本局钻牌并标「中」 */
+  tingHintEnabled?: boolean
 }
 
 export type ResolvedTableProps = {

@@ -74,14 +74,27 @@ function parseStunServer(url: string): RTCIceServer | null {
   return /^stuns?:.+/.test(url) ? { urls: url } : null
 }
 
+function isLanHostname(hostname: string): boolean {
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true
+  if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true
+  return hostname.endsWith('.local')
+}
+
 export function getSelfHostConfig(): SelfHostConfig | null {
-  const signalingUrl = query('selfHost') ?? env('VITE_SELF_HOST_SIGNALING')
+  const explicitUrl = query('selfHost') ?? env('VITE_SELF_HOST_SIGNALING')
+  const autoLanUrl = !explicitUrl && typeof window !== 'undefined' && isLanHostname(window.location.hostname)
+    ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/signal`
+    : null
+  const signalingUrl = explicitUrl ?? autoLanUrl
   if (!signalingUrl || !/^wss?:\/\//.test(signalingUrl)) return null
 
-  const iceServers: RTCIceServer[] = [
-    // 公共 STUN 兜底：多数家用网络能打洞直连；打不通时用 TURN 中继。
-    { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
-  ]
+  const iceServers: RTCIceServer[] = autoLanUrl
+    ? []
+    : [
+        // 公共 STUN 兜底：多数家用网络能打洞直连；打不通时用 TURN 中继。
+        { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
+      ]
   const turn = query('turn') ?? env('VITE_TURN_SERVER')
   if (turn) {
     const parsed = parseTurnServer(turn)

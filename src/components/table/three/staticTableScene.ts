@@ -390,7 +390,7 @@ function makeBackTexture() {
 }
 
 // 在 ctx 上以 (x,y,w,h) 画一张牌的牌面：浅色底 + 牌面图 + 投影，单张纹理与图集共用。
-function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, y: number, w: number, h: number, marker: 'joker' | 'wildcard' | 'laizi' | false = false) {
+function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, y: number, w: number, h: number, marker: 'joker' | 'wildcard' | 'laizi' | 'zhong' | false = false) {
   const image = scene.userData.tileImages.get(tile) || scene.userData.tileImages.get('white')
   const [faceTop, faceMiddle, faceBottom] = theme.tileFaceGradient ?? ['#e9e8df', '#dad9d0', '#c9ccc2']
   if (options.animeTable) {
@@ -417,10 +417,10 @@ function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, 
     ctx.restore()
   }
   if (marker) {
-    // 按身份区分标记：精=真精牌/白板翻精（白板即精）；替=莲花麻将白板替身（可代本局精牌）；癞=广麻白板癞子。
-    const markerLabel = marker === 'wildcard' ? '\u66ff' : marker === 'laizi' ? '\u764d' : '\u7cbe'
-    const markerColor = marker === 'wildcard' ? '#b88220' : marker === 'laizi' ? '#c0342e' : '#08a9dc'
-    const markerShadow = marker === 'wildcard' ? 'rgba(75,45,0,.85)' : marker === 'laizi' ? 'rgba(90,10,12,.85)' : 'rgba(0,40,70,.85)'
+    // 按身份区分标记：钻=真钻牌；中=听牌提示下红中替代本局钻牌；替=红中替身；癞=白板癞子。
+    const markerLabel = marker === 'zhong' ? '\u4e2d' : marker === 'wildcard' ? '\u66ff' : marker === 'laizi' ? '\u764d' : '\u94bb'
+    const markerColor = marker === 'zhong' || marker === 'wildcard' ? '#b88220' : marker === 'laizi' ? '#c0342e' : '#08a9dc'
+    const markerShadow = marker === 'zhong' || marker === 'wildcard' ? 'rgba(75,45,0,.85)' : marker === 'laizi' ? 'rgba(90,10,12,.85)' : 'rgba(0,40,70,.85)'
     ctx.save()
     ctx.fillStyle = markerColor
     ctx.beginPath()
@@ -445,7 +445,7 @@ function drawTileFace(ctx: CanvasRenderingContext2D, tile: TileType, x: number, 
   }
 }
 
-function makeFaceMaterial(tile: TileType, marker: 'joker' | 'wildcard' | 'laizi' | false = false) {
+function makeFaceMaterial(tile: TileType, marker: 'joker' | 'wildcard' | 'laizi' | 'zhong' | false = false) {
   const key = marker ? `${marker}:${tile}` : tile
   if (faceMaterials.has(key)) return faceMaterials.get(key)
   const surface = document.createElement('canvas')
@@ -682,7 +682,7 @@ function getAtlasMaterial() {
   return mat
 }
 
-function makeAtlasMaterial(marker: 'joker' | 'wildcard' | 'laizi') {
+function makeAtlasMaterial(marker: 'joker' | 'wildcard' | 'laizi' | 'zhong') {
   const canvas = document.createElement('canvas')
   canvas.width = ATLAS_COLS * ATLAS_CELL_W
   canvas.height = ATLAS_ROWS * ATLAS_CELL_H
@@ -738,6 +738,12 @@ let laiziAtlasMaterial: TileMaterial | null = null
 function getLaiziAtlasMaterial() {
   if (!laiziAtlasMaterial) laiziAtlasMaterial = makeAtlasMaterial('laizi')
   return laiziAtlasMaterial
+}
+
+let zhongAtlasMaterial: TileMaterial | null = null
+function getZhongAtlasMaterial() {
+  if (!zhongAtlasMaterial) zhongAtlasMaterial = makeAtlasMaterial('zhong')
+  return zhongAtlasMaterial
 }
 
 function makeMachineTexture() {
@@ -1042,6 +1048,7 @@ function addTable() {
     getJokerAtlasMaterial,
     getWildcardAtlasMaterial,
     getLaiziAtlasMaterial,
+    getZhongAtlasMaterial,
     forEachFaceMaterial(callback: (material: TileMaterial) => void) {
       faceMaterials.forEach(callback)
     },
@@ -1051,6 +1058,7 @@ function addTable() {
       jokerAtlasMaterial = null
       wildcardAtlasMaterial = null
       laiziAtlasMaterial = null
+      zhongAtlasMaterial = null
     },
   }
 }

@@ -41,26 +41,11 @@ export function isSpecialTile(tile: TileType, jokers: TileType[]): boolean {
   return jokers.includes(tile) ? tile === RED_DRAGON : tile === GREEN_DRAGON
 }
 
-function replaceRedDragonWithM3(hand: TileType[]): { convertedHand: TileType[]; redDragonCount: number } {
-  const convertedHand: TileType[] = []
-  let redDragonCount = 0
-  for (const tile of hand) {
-    if (tile === RED_DRAGON) {
-      convertedHand.push('m3')
-      redDragonCount += 1
-    } else {
-      convertedHand.push(tile)
-    }
-  }
-  return { convertedHand, redDragonCount }
-}
-
 function generateRedSubstitutionCandidates(hand: TileType[], jokers: TileType[]) {
   const jokerSet = new Set(jokers)
   const wildcards = hand.filter((tile) => jokerSet.has(tile)).length
   const candidates: Array<{ wildcards: number; fixedRedFaces: TileType[] }> = [{ wildcards, fixedRedFaces: [] }]
   if (hand.includes(RED_DRAGON)) {
-    candidates.push({ wildcards, fixedRedFaces: ['m3'] })
     candidates.push({ wildcards, fixedRedFaces: [RED_DRAGON] })
   }
   return candidates
@@ -250,26 +235,7 @@ export function canMakeMelds(
     }
   }
 
-  // (3) 乱风顺：任意 3 种不同风牌（锚定当前最低风牌，从其余 3 风取 2）
-  if (WIND_CYCLE.includes(tile)) {
-    const others = WIND_CYCLE.filter((wind) => wind !== tile)
-    for (let a = 0; a < others.length; a += 1) {
-      for (let b = a + 1; b < others.length; b += 1) {
-        let next = new Map(counts)
-        const missing: TileType[] = []
-        for (const wind of [tile, others[a], others[b]]) {
-          if ((next.get(wind) || 0) > 0) next = consumeTile(next, wind, 1)
-          else missing.push(wind)
-        }
-        if (missing.length <= jokers + limitedJokers && fillMissing(missing, next)) {
-          memo.set(signature, true)
-          return true
-        }
-      }
-    }
-  }
-
-  // (4) 三元顺：中发白组成一组面子
+  // (3) 三元顺：中发白组成一组面子（东南西北风不可成顺，只能作刻子或将牌）
   if (DRAGONS.includes(tile)) {
     let next = new Map(counts)
     const missing: TileType[] = []
@@ -495,10 +461,6 @@ function evaluateCorePattern(
   }
   if (remaining.length + wildcardCount !== neededMelds * 3 + 2) return null
   if (canMakePinghu(remaining, wildcardCount, neededMelds)) return { pattern: 'pinghu', fan: 1 }
-  if (remaining.includes(RED_DRAGON)) {
-    const { convertedHand } = replaceRedDragonWithM3(remaining)
-    if (canMakePinghu(convertedHand, wildcardCount, neededMelds)) return { pattern: 'pinghu', fan: 1 }
-  }
   return null
 }
 
@@ -870,9 +832,9 @@ export function concealedKongs(hand: TileType[], _jokers: TileType[]): TileType[
   return TILE_TYPES.filter((tile) => matchingCount(hand, tile) === 4)
 }
 
-/** 风杠（乱风杠）：手牌同时持有东南西北各 1 张；精牌按自身风牌面使用。 */
-export function windKong(hand: TileType[], _jokers: TileType[]): boolean {
-  return WIND_CYCLE.every((wind) => matchingCount(hand, wind) >= 1)
+/** 东南西北风不可风杠放倒。 */
+export function windKong(_hand: TileType[], _jokers: TileType[]): boolean {
+  return false
 }
 
 export function canRobKong(hand: TileType[], kongTile: TileType, exposedMeldCount: number, jokers: TileType[], jokerSubstitutes: TileType[] = []): boolean {

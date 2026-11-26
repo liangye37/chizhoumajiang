@@ -620,13 +620,15 @@ export function useLotusGame({
       if (tile !== 'green' || state.jokerTiles.value.includes('green')) return
       const player = state.players[playerIndex]
       player.greenDiscards = [...(player.greenDiscards ?? []), tile]
-      await playPresentationSoundAndWait('dapai.mp3', 0.8)
+      playPresentationSound('dapai.mp3', 0.8)
+      if (!openingInstant) await timer.wait(220)
       return tileFlowExecutor.reserveHeadAndDrawTail(playerIndex)
     },
     useGreenDiscard: async (playerIndex, tile) => {
       const player = state.players[playerIndex]
       player.greenDiscards = [...(player.greenDiscards ?? []), tile]
-      await playPresentationSoundAndWait('dapai.mp3', 0.8)
+      playPresentationSound('dapai.mp3', 0.8)
+      if (!openingInstant) await timer.wait(220)
       if (state.wall.value.length > 14) {
         if (await tileFlowExecutor.reserveHeadAndDrawTail(playerIndex)) {
           turnOrchestrator.markDrawSource(playerIndex, true)

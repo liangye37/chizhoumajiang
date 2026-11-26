@@ -33,6 +33,7 @@ interface Props {
   humanSeats?: number[]
   jokerTiles?: TileType[]
   wildcardTiles?: TileType[]
+  tingHintEnabled?: boolean
   themeName?: TableThemeName
 }
 
@@ -189,7 +190,7 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
         </div>
         <div v-if="resultPresentation.kind !== 'draw' && roundResult.horses?.length" class="horse-area">
           <div>
-            <MahjongTile v-for="(tile, index) in roundResult.horses" :key="index" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :theme-name="themeName" :class="{ 'horse-hit': isHorseForSeat(tile, relativeSeat) }" small disabled />
+            <MahjongTile v-for="(tile, index) in roundResult.horses" :key="index" :tile="tile" :joker-tiles="jokerTiles" :wildcard-tiles="wildcardTiles" :replace-red-with-joker="tingHintEnabled" :theme-name="themeName" :class="{ 'horse-hit': isHorseForSeat(tile, relativeSeat) }" small disabled />
           </div>
         </div>
         <div class="round-rankings">
@@ -231,10 +232,6 @@ const relativeSeat = computed<0 | 1 | 2 | 3>(() => {
               <div class="final-name">
                 <strong>{{ entry.name }}</strong>
                 <small v-if="entry.playerIndex === 0">你</small>
-                <button
-                  v-if="gameMode === 'remote' && entry.playerIndex !== 0 && playerId && humanSeats?.includes(entry.playerIndex)"
-                  class="report-link" @click="$emit('report', entry.name)"
-                >举报</button>
               </div>
               <em>{{ entry.score }}</em>
             </article>

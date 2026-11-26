@@ -125,4 +125,34 @@ describe('shared normal tile animations survive state refreshes', () => {
     s.setNow(600); s.presenter.rebuild()
     expect(s.presenter.animate(600, new THREE.Vector3())).toBe(false)
   })
+
+  it('animates new green discard and subsequent tail supplement draw smoothly', () => {
+    const s = setup()
+    s.props.wall = Array.from({ length: 80 }, () => 'm1' as TileType)
+    s.props.wallHeadDrawn = 56
+    s.props.wallCount = 80
+    s.props.currentPlayer = 1
+    s.props.players[1].hand = Array.from({ length: 13 }, () => 'm2' as TileType)
+    s.props.players[1].concealedTileCount = 13
+    s.presenter.rebuild()
+    expect(s.presenter.animate(0, new THREE.Vector3())).toBe(false)
+
+    // 打出发财：亮出的发财应从手牌飞落到发财区
+    s.props.players[1].greenDiscards = ['green']
+    s.setNow(100)
+    s.presenter.rebuild()
+    expect(s.presenter.animate(150, new THREE.Vector3())).toBe(true)
+    expect(s.presenter.animate(500, new THREE.Vector3())).toBe(false)
+
+    // 牌尾补摸：wall 从尾部少 1 张、wallHeadDrawn 不变 → 补牌应从牌尾飞向手牌
+    s.props.wall = s.props.wall.slice(0, 79)
+    s.props.wallCount = 79
+    s.props.players[1].hand = [...s.props.players[1].hand, 'p5']
+    s.props.players[1].concealedTileCount = 14
+    s.props.players[1].drawnTileIndex = 13
+    s.setNow(600)
+    s.presenter.rebuild()
+    expect(s.presenter.animate(750, new THREE.Vector3())).toBe(true)
+    expect(s.presenter.animate(1050, new THREE.Vector3())).toBe(false)
+  })
 })
