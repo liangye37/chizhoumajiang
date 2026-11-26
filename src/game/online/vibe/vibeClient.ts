@@ -81,6 +81,14 @@ export function getVibeClient(): VibeHubSDK.Client | null {
  */
 export const useRealVibeSdk = import.meta.env.VITE_VIBE_REAL === '1'
 
+export async function reinitVibeHub(): Promise<VibeHubSDK.Client | null> {
+  client = null
+  initPromise = null
+  vibeStatus.value = 'idle'
+  vibeError.value = ''
+  return initVibeHub()
+}
+
 export async function initVibeHub(): Promise<VibeHubSDK.Client | null> {
   if (initPromise) return initPromise
   if (typeof window === 'undefined') {

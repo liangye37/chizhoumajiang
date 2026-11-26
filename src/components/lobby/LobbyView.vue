@@ -9,7 +9,12 @@ import RuleVariantPicker from './RuleVariantPicker.vue'
 import type { GameMode } from '../../game/core/contracts/activeGamePort'
 import type { MatchType } from '../../game/core/contracts/types'
 import { getRuleVariant, type RuleVariant } from '../../game/core/rules/ruleVariants'
-import { getSelfHostConfig } from '../../game/online/transport/selfHost/selfHostConfig'
+import {
+  getSelfHostConfig,
+  parseOnlineServerInput,
+  saveSignalingUrl,
+} from '../../game/online/transport/selfHost/selfHostConfig'
+import { reinitVibeHub } from '../../game/online/vibe/vibeClient'
 import type { LobbySeat } from '../../game/online/vibe/vibeLobby'
 import AnimeCharacterPicker from '../llm/AnimeCharacterPicker.vue'
 import type { CharacterId } from '../../game/llm/animeCharacters'
@@ -61,16 +66,18 @@ type DialogName = 'join' | 'rule' | 'character' | null
 const dialog = ref<DialogName>(null)
 
 const appVersion = `v${pkg.version}`
-const selfHostConfig = getSelfHostConfig()
-const lanAvailable = Boolean(selfHostConfig) || import.meta.env.DEV
-const fallbackOrigin = selfHostConfig && typeof window !== 'undefined' ? window.location.origin : ''
-const lanUrls = ref<string[]>(fallbackOrigin ? [fallbackOrigin] : [])
+const selfHostConfig = ref(getSelfHostConfig())
+const lanAvailable = computed(() => Boolean(selfHostConfig.value) || import.meta.env.DEV)
+const fallbackOrigin = computed(() => selfHostConfig.value && typeof window !== 'undefined' ? window.location.origin : '')
+const lanUrls = ref<string[]>(fallbackOrigin.value ? [fallbackOrigin.value] : [])
 const selectedLanIndex = ref(0)
-const lanAddress = computed(() => lanUrls.value[selectedLanIndex.value] ?? fallbackOrigin)
+const lanAddress = computed(() => lanUrls.value[selectedLanIndex.value] ?? fallbackOrigin.value)
 const addressCopied = ref(false)
+const serverInput = ref('')
+const serverInputError = ref('')
 
 onMounted(async () => {
-  if (!selfHostConfig || typeof fetch !== 'function') return
+  if (!selfHostConfig.value || typeof fetch !== 'function') return
   try {
     const res = await fetch('/api/lan-info', { cache: 'no-store' })
     if (!res.ok) return
@@ -84,9 +91,32 @@ onMounted(async () => {
       selectedLanIndex.value = 0
     }
   } catch {
-    // 非 lan-server.mjs 托管环境（如静态开发服）保留当前 origin。
+    // 非 lan-server.mjs 托管环境（如公网 GitHub Pages）保留当前 origin。
   }
 })
+
+async function applyOnlineServer() {
+  serverInputError.value = ''
+  const parsed = parseOnlineServerInput(serverInput.value)
+  if (!parsed) {
+    serverInputError.value = '请输入公网信令地址（如 wss://xxx.workers.dev/signal）或电脑局域网 IP（如 10.53.58.9）'
+    return
+  }
+  if (parsed.kind === 'navigate') {
+    window.location.href = parsed.url
+    return
+  }
+  if (window.location.protocol === 'https:' && parsed.url.startsWith('ws://')) {
+    serverInputError.value = 'HTTPS 页面只能连接 wss:// 加密信令；局域网服务请直接输入电脑 IP（如 10.53.58.9）跳转访问。'
+    return
+  }
+  saveSignalingUrl(parsed.url)
+  selfHostConfig.value = getSelfHostConfig()
+  if (fallbackOrigin.value && lanUrls.value.length === 0) {
+    lanUrls.value = [fallbackOrigin.value]
+  }
+  await reinitVibeHub()
+}
 
 function cycleLanAddress() {
   if (lanUrls.value.length <= 1) return
@@ -160,7 +190,7 @@ function viewRules() {
       <section class="lobby-actions" aria-label="对局操作">
         <div class="mode-selector" role="radiogroup" aria-label="游戏模式">
           <button data-action-role="secondary" :class="{ active: gameMode === 'local' }" role="radio" :aria-checked="gameMode === 'local'" @click="$emit('update:gameMode', 'local')"><b>单机对战</b><span>与 AI 同桌</span></button>
-          <button data-action-role="secondary" :class="{ active: gameMode === 'remote' }" role="radio" :aria-checked="gameMode === 'remote'" @click="$emit('update:gameMode', 'remote')"><b>局域网联机</b><span>同热点 / Wi-Fi 建房</span></button>
+          <button data-action-role="secondary" :class="{ active: gameMode === 'remote' }" role="radio" :aria-checked="gameMode === 'remote'" @click="$emit('update:gameMode', 'remote')"><b>联机对战</b><span>好友同桌建房</span></button>
         </div>
         <template v-if="gameMode === 'local'">
           <GameSettingsSummary
@@ -175,8 +205,19 @@ function viewRules() {
 
         <div v-else class="remote-lobby">
           <div v-if="!lanAvailable" class="lan-unavailable-card">
-            <strong>请先启动局域网服务</strong>
-            <p>由房主在电脑打开桌面「池州麻将」启动服务，朋友连上同一热点或 Wi-Fi 后，用浏览器访问房主电脑显示的局域网地址即可建房同桌。</p>
+            <strong>连接联机服务</strong>
+            <p>输入公网信令地址（如 Cloudflare Worker 的 <code>wss://...</code>），或输入同 Wi-Fi 电脑的局域网 IP（如 <code>10.53.58.9</code>）一键跳转。</p>
+            <div class="lan-connect-row">
+              <input
+                v-model="serverInput"
+                type="text"
+                inputmode="url"
+                placeholder="wss://xxx.workers.dev/signal 或 10.53.58.9"
+                @keyup.enter="applyOnlineServer"
+              />
+              <button type="button" data-action-role="primary" :disabled="!serverInput.trim()" @click="applyOnlineServer">连接</button>
+            </div>
+            <p v-if="serverInputError" class="session-error" role="alert">{{ serverInputError }}</p>
           </div>
           <template v-else>
             <div v-if="!roomId && lanAddress" class="lan-address-bar" role="button" tabindex="0" title="点击复制局域网地址" @click="copyLanAddress" @keyup.enter="copyLanAddress">
@@ -302,6 +343,26 @@ function viewRules() {
   color: var(--theme-text-muted);
   font-size: 13px;
   line-height: 1.6;
+}
+.lan-connect-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.lan-connect-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--theme-border);
+  border-radius: 7px;
+  background: var(--theme-panel);
+  color: var(--theme-text);
+  font-size: 13px;
+}
+.lan-connect-row button {
+  padding: 8px 14px;
+  border-radius: 7px;
+  white-space: nowrap;
 }
 .lan-address-bar {
   display: flex;

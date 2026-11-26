@@ -109,6 +109,7 @@ class SignalingServer:
             "roomId": room_id,
             "hostId": host_id,
             "members": members,
+            "relay": True,
         })
         await self._broadcast(room, {"type": "peer_join", "peerId": peer_id}, exclude=peer_id)
         return room_id, peer_id
@@ -128,6 +129,19 @@ class SignalingServer:
 
                 if mtype == "join":
                     room_id, peer_id = await self._handle_join(ws, msg)
+                elif mtype == "relay":
+                    if not room_id or not peer_id:
+                        continue
+                    to = str(msg.get("to", "")).strip()
+                    data = msg.get("data")
+                    async with self.lock:
+                        room = self.rooms.get(room_id)
+                        target = room.members.get(to) if (room and to) else None
+                    if to:
+                        if target is not None:
+                            await self._send(target, {"type": "relay", "from": peer_id, "data": data})
+                    elif room is not None:
+                        await self._broadcast(room, {"type": "relay", "from": peer_id, "data": data}, exclude=peer_id)
                 elif mtype == "signal":
                     to = str(msg.get("to", "")).strip()
                     data = msg.get("data")

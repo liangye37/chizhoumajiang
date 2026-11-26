@@ -29,6 +29,18 @@ export interface SignalingConnection {
 const JOIN_TIMEOUT_MS = 8000
 const META_TIMEOUT_MS = 4000
 
+function withRoomQuery(url: string, roomId: string): string {
+  try {
+    const parsed = new URL(url)
+    if (!parsed.searchParams.has('room')) {
+      parsed.searchParams.set('room', roomId.toUpperCase())
+    }
+    return parsed.toString()
+  } catch {
+    return url
+  }
+}
+
 /** 连接信令服务器并加入房间；resolve 于收到 welcome（peerId/hostId 已确定）。 */
 export function openSignaling(
   url: string,
@@ -38,7 +50,7 @@ export function openSignaling(
   return new Promise((resolve, reject) => {
     let ws: WebSocket
     try {
-      ws = new WebSocket(url)
+      ws = new WebSocket(withRoomQuery(url, roomId))
     } catch (error) {
       reject(error instanceof Error ? error : new Error(String(error)))
       return

@@ -1,0 +1,12 @@
+name = "chizhou-mahjong-relay"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+[durable_objects]
+bindings = [
+  { name = "ROOMS", class_name = "RoomRelay" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomRelay"]

@@ -74,6 +74,91 @@ function parseStunServer(url: string): RTCIceServer | null {
   return /^stuns?:.+/.test(url) ? { urls: url } : null
 }
 
+const SAVED_SIGNALING_KEY = 'chizhou_signaling_url'
+
+export function readSavedSignalingUrl(): string | null {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return null
+    const raw = window.localStorage.getItem(SAVED_SIGNALING_KEY)?.trim()
+    return raw && /^wss?:\/\//.test(raw) ? raw : null
+  } catch {
+    return null
+  }
+}
+
+export function saveSignalingUrl(url: string | null): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return
+    if (url && /^wss?:\/\//.test(url)) {
+      window.localStorage.setItem(SAVED_SIGNALING_KEY, url)
+    } else {
+      window.localStorage.removeItem(SAVED_SIGNALING_KEY)
+    }
+  } catch {
+    // 隐私模式忽略
+  }
+}
+
+/**
+ * 解析用户在联机面板输入的地址：
+ * - `wss://...` 或 `https://...` → 规范为 `wss://.../signal`（公网信令，在当前页直接生效）
+ * - 局域网 IP / `http://...` → 返回跳转地址 `{ kind: 'navigate', url }`（跳到电脑局域网服务）
+ */
+export function parseOnlineServerInput(raw: string):
+  | { kind: 'signaling'; url: string }
+  | { kind: 'navigate'; url: string }
+  | null {
+  const text = raw.trim()
+  if (!text) return null
+  if (/^wss?:\/\//i.test(text)) {
+    try {
+      const parsed = new URL(text)
+      if (!parsed.pathname || parsed.pathname === '/') parsed.pathname = '/signal'
+      return { kind: 'signaling', url: parsed.toString() }
+    } catch {
+      return null
+    }
+  }
+  if (/^https:\/\//i.test(text)) {
+    try {
+      const parsed = new URL(text)
+      parsed.protocol = 'wss:'
+      if (!parsed.pathname || parsed.pathname === '/') parsed.pathname = '/signal'
+      return { kind: 'signaling', url: parsed.toString() }
+    } catch {
+      return null
+    }
+  }
+  if (/^http:\/\//i.test(text)) {
+    try {
+      return { kind: 'navigate', url: new URL(text).toString() }
+    } catch {
+      return null
+    }
+  }
+  // 裸 IP 或 IP:port（如 10.53.58.9 或 192.168.137.1:5173）
+  if (/^\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?(?:\/.*)?$/.test(text)) {
+    const hasPort = /:\d{1,5}(?:\/|$)/.test(text)
+    const normalized = hasPort ? `http://${text}` : `http://${text}:5173/`
+    try {
+      return { kind: 'navigate', url: new URL(normalized).toString() }
+    } catch {
+      return null
+    }
+  }
+  // 裸域名（如 xxx.workers.dev）→ 按公网 wss 信令处理
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(?::\d{1,5})?(?:\/.*)?$/i.test(text)) {
+    try {
+      const parsed = new URL(`wss://${text}`)
+      if (!parsed.pathname || parsed.pathname === '/') parsed.pathname = '/signal'
+      return { kind: 'signaling', url: parsed.toString() }
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
 function isLanHostname(hostname: string): boolean {
   if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true
   if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true
@@ -86,7 +171,8 @@ export function getSelfHostConfig(): SelfHostConfig | null {
   const autoLanUrl = !explicitUrl && typeof window !== 'undefined' && isLanHostname(window.location.hostname)
     ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/signal`
     : null
-  const signalingUrl = explicitUrl ?? autoLanUrl
+  const savedUrl = !explicitUrl && !autoLanUrl ? readSavedSignalingUrl() : null
+  const signalingUrl = explicitUrl ?? autoLanUrl ?? savedUrl
   if (!signalingUrl || !/^wss?:\/\//.test(signalingUrl)) return null
 
   const iceServers: RTCIceServer[] = autoLanUrl
