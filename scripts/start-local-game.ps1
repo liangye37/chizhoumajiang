@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'SilentlyContinue'
+﻿$ErrorActionPreference = 'SilentlyContinue'
 $projectDir = Split-Path -Parent $PSScriptRoot
 $port = 5173
 
@@ -16,16 +16,17 @@ function Test-PortOpen {
 }
 
 function Get-BestLanIp {
-  $ips = Get-NetIPAddress -AddressFamily IPv4 |
+  $entries = Get-NetIPAddress -AddressFamily IPv4 |
     Where-Object {
-      $_.IPAddress -notlike '127.*' -and
-      $_.IPAddress -notlike '169.254.*' -and
-      $_.PrefixOrigin -ne 'WellKnown'
-    } |
-    Select-Object -ExpandProperty IPAddress
-  $hotspot = $ips | Where-Object { $_ -like '192.168.137.*' } | Select-Object -First 1
+      $_.IPAddress -match '^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)' -and
+      $_.PrefixOrigin -ne 'WellKnown' -and
+      $_.InterfaceAlias -notmatch 'vEthernet|WSL|Docker|VMware|VirtualBox|Mihomo|Clash'
+    }
+  $hotspot = $entries | Where-Object { $_.IPAddress -like '192.168.137.*' } | Select-Object -First 1 -ExpandProperty IPAddress
   if ($hotspot) { return $hotspot }
-  $lan = $ips | Where-Object { $_ -match '^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)' } | Select-Object -First 1
+  $wifi = $entries | Where-Object { $_.InterfaceAlias -match 'WLAN|Wi-Fi|WiFi|Wireless|无线' } | Select-Object -First 1 -ExpandProperty IPAddress
+  if ($wifi) { return $wifi }
+  $lan = $entries | Select-Object -First 1 -ExpandProperty IPAddress
   if ($lan) { return $lan }
   return $null
 }

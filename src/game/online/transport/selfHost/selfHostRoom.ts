@@ -169,11 +169,17 @@ export function createSelfHostRoom(options: SelfHostRoomOptions): VibeHubSDK.Roo
     detachLink(link)
   }
 
+  const hasTurnServer = iceServers.some((server) => {
+    const urls = Array.isArray(server.urls) ? server.urls : [server.urls]
+    return urls.some((u) => /^turns?:/i.test(u))
+  })
+
   function createPeerConnection(forceRelayOverride?: boolean): RTCPeerConnection {
     if (options.peerConnectionFactory) return options.peerConnectionFactory()
+    const useRelay = forceRelay || (Boolean(forceRelayOverride) && hasTurnServer)
     return new RTCPeerConnection({
       iceServers,
-      ...(forceRelay || forceRelayOverride ? { iceTransportPolicy: 'relay' as RTCIceTransportPolicy } : {}),
+      ...(useRelay ? { iceTransportPolicy: 'relay' as RTCIceTransportPolicy } : {}),
     })
   }
 

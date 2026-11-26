@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createMockVibeRoom } from '../host/mockVibeRoom'
-import { combineSeeds, deriveDice, hashSeed, runCommittedShuffle, shuffleTiles } from './committedShuffle'
+import { combineSeeds, deriveDice, hashSeed, runCommittedShuffle, sha256HexFallback, shuffleTiles } from './committedShuffle'
 
 describe('committedShuffle 纯函数', () => {
   it('shuffleTiles 同种子确定性、不同种子不同结果', () => {
@@ -29,8 +29,11 @@ describe('committedShuffle 纯函数', () => {
     }
   })
 
-  it('hashSeed 对相同输入一致', async () => {
-    expect(await hashSeed('0:abc')).toBe(await hashSeed('0:abc'))
+  it('hashSeed 对相同输入一致，且非安全上下文回退与 WebCrypto SHA-256 完全一致', async () => {
+    for (const sample of ['', '0:abc', '1:测试中文种子-2026', '3:' + 'a'.repeat(120)]) {
+      expect(await hashSeed(sample)).toBe(sha256HexFallback(sample))
+      expect(sha256HexFallback(sample)).toHaveLength(64)
+    }
   })
 
   it('承诺协议完成后，所有参与者共同决定牌墙和两次骰点', async () => {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import pkg from '../../../package.json'
 import RoomPanel from './RoomPanel.vue'
 import LobbyThemeVisual from './LobbyThemeVisual.vue'
@@ -63,8 +63,35 @@ const dialog = ref<DialogName>(null)
 const appVersion = `v${pkg.version}`
 const selfHostConfig = getSelfHostConfig()
 const lanAvailable = Boolean(selfHostConfig) || import.meta.env.DEV
-const lanAddress = selfHostConfig && typeof window !== 'undefined' ? window.location.origin : ''
+const fallbackOrigin = selfHostConfig && typeof window !== 'undefined' ? window.location.origin : ''
+const lanUrls = ref<string[]>(fallbackOrigin ? [fallbackOrigin] : [])
+const selectedLanIndex = ref(0)
+const lanAddress = computed(() => lanUrls.value[selectedLanIndex.value] ?? fallbackOrigin)
 const addressCopied = ref(false)
+
+onMounted(async () => {
+  if (!selfHostConfig || typeof fetch !== 'function') return
+  try {
+    const res = await fetch('/api/lan-info', { cache: 'no-store' })
+    if (!res.ok) return
+    const data = await res.json() as { urls?: unknown }
+    if (!Array.isArray(data.urls)) return
+    const cleaned = data.urls
+      .filter((item): item is string => typeof item === 'string' && /^https?:\/\//.test(item))
+      .map((url) => url.replace(/\/$/, ''))
+    if (cleaned.length > 0) {
+      lanUrls.value = cleaned
+      selectedLanIndex.value = 0
+    }
+  } catch {
+    // 非 lan-server.mjs 托管环境（如静态开发服）保留当前 origin。
+  }
+})
+
+function cycleLanAddress() {
+  if (lanUrls.value.length <= 1) return
+  selectedLanIndex.value = (selectedLanIndex.value + 1) % lanUrls.value.length
+}
 
 const ruleOption = computed(() => getRuleVariant(props.selectedRule))
 const dialogTitle = computed(() => ({
@@ -74,11 +101,12 @@ const dialogTitle = computed(() => ({
 }[dialog.value ?? 'join']))
 
 async function copyLanAddress() {
-  if (!lanAddress) return
+  const addr = lanAddress.value
+  if (!addr) return
   let ok = false
   if (window.isSecureContext && navigator.clipboard) {
     try {
-      await navigator.clipboard.writeText(lanAddress)
+      await navigator.clipboard.writeText(addr)
       ok = true
     } catch { /* fallback below */ }
   }
@@ -86,7 +114,7 @@ async function copyLanAddress() {
     let textarea: HTMLTextAreaElement | null = null
     try {
       textarea = document.createElement('textarea')
-      textarea.value = lanAddress
+      textarea.value = addr
       textarea.setAttribute('readonly', '')
       textarea.style.position = 'fixed'
       textarea.style.top = '-9999px'
@@ -152,8 +180,15 @@ function viewRules() {
           </div>
           <template v-else>
             <div v-if="!roomId && lanAddress" class="lan-address-bar" role="button" tabindex="0" title="点击复制局域网地址" @click="copyLanAddress" @keyup.enter="copyLanAddress">
-              <span>本机地址</span>
+              <span>联机地址</span>
               <code>{{ lanAddress }}</code>
+              <button
+                v-if="lanUrls.length > 1"
+                type="button"
+                class="lan-switch-btn"
+                title="切换网卡地址（Wi-Fi / 有线）"
+                @click.stop="cycleLanAddress"
+              >切换 ({{ selectedLanIndex + 1 }}/{{ lanUrls.length }})</button>
               <em>{{ addressCopied ? '已复制' : '复制' }}</em>
             </div>
             <label v-if="!roomId" class="remote-field">
@@ -296,6 +331,19 @@ function viewRules() {
   color: var(--theme-accent);
   font-style: normal;
   white-space: nowrap;
+}
+.lan-switch-btn {
+  padding: 2px 6px;
+  border: 1px solid var(--theme-border);
+  border-radius: 5px;
+  background: var(--theme-panel);
+  color: var(--theme-text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.lan-switch-btn:hover {
+  color: var(--theme-text);
 }
 .lobby-version {
   position: fixed;

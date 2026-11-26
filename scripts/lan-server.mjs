@@ -35,16 +35,30 @@ const MIME = {
   '.woff2': 'font/woff2',
 }
 
+function isPrivateLanIpv4(ip) {
+  return /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip)
+}
+
+function lanPriority(name, ip) {
+  if (ip.startsWith('192.168.137.')) return 0
+  if (/vethernet|wsl|docker|vmware|virtualbox|vbox|hyper-v|mihomo|clash|meta|tun|tap/i.test(name)) return 4
+  if (/wlan|wi-fi|wifi|wireless|无线/i.test(name)) return 1
+  if (ip.startsWith('192.168.')) return 2
+  return 3
+}
+
 function getLanUrls() {
   const ifaces = os.networkInterfaces()
-  const ips = []
-  for (const list of Object.values(ifaces)) {
+  const entries = []
+  for (const [name, list] of Object.entries(ifaces)) {
     for (const info of list || []) {
-      if (info.family === 'IPv4' && !info.internal) ips.push(info.address)
+      if (info.family === 'IPv4' && !info.internal && isPrivateLanIpv4(info.address)) {
+        entries.push({ name, address: info.address })
+      }
     }
   }
-  ips.sort((a, b) => (a.startsWith('192.168.137.') ? -1 : b.startsWith('192.168.137.') ? 1 : 0))
-  return ips.map((ip) => `http://${ip}:${port}/`)
+  entries.sort((a, b) => lanPriority(a.name, a.address) - lanPriority(b.name, b.address))
+  return entries.map((entry) => `http://${entry.address}:${port}/`)
 }
 
 // ── RFC 6455 极简 WebSocket 封装 ─────────────────────────────────────────
@@ -73,8 +87,30 @@ function encodeFrame(opcode, payloadBuf) {
 
 function wrapWebSocket(socket) {
   let closed = false
+  let closeEmitted = false
   let buffer = Buffer.alloc(0)
+  let fragmentedChunks = null
+  let alive = true
   const listeners = { message: [], close: [] }
+
+  const pingTimer = setInterval(() => {
+    if (closed || socket.destroyed) return
+    if (!alive) {
+      socket.destroy()
+      emitClose()
+      return
+    }
+    alive = false
+    try { socket.write(encodeFrame(0x9, Buffer.alloc(0))) } catch {}
+  }, 20000)
+
+  function emitClose() {
+    if (closeEmitted) return
+    closeEmitted = true
+    closed = true
+    clearInterval(pingTimer)
+    for (const fn of listeners.close) fn()
+  }
 
   const ws = {
     send(obj) {
@@ -85,27 +121,26 @@ function wrapWebSocket(socket) {
       } catch {}
     },
     close() {
-      if (closed) return
-      closed = true
-      try { socket.write(encodeFrame(0x8, Buffer.alloc(0))) } catch {}
-      socket.end()
+      if (!closed) {
+        closed = true
+        clearInterval(pingTimer)
+        try { socket.write(encodeFrame(0x8, Buffer.alloc(0))) } catch {}
+        socket.end()
+      }
+      emitClose()
     },
     on(event, fn) {
       listeners[event]?.push(fn)
     },
   }
 
-  function emitClose() {
-    if (closed) return
-    closed = true
-    for (const fn of listeners.close) fn()
-  }
-
   socket.on('data', (chunk) => {
+    alive = true
     buffer = Buffer.concat([buffer, chunk])
     while (buffer.length >= 2) {
       const b0 = buffer[0]
       const b1 = buffer[1]
+      const fin = (b0 & 0x80) !== 0
       const opcode = b0 & 0x0f
       const masked = (b1 & 0x80) !== 0
       let payloadLen = b1 & 0x7f
@@ -140,9 +175,27 @@ function wrapWebSocket(socket) {
         if (!closed && !socket.destroyed) socket.write(encodeFrame(0xa, payload))
         continue
       }
+      if (opcode === 0xa) {
+        alive = true
+        continue
+      }
       if (opcode === 0x1) {
-        const text = payload.toString('utf8')
-        for (const fn of listeners.message) fn(text)
+        if (fin) {
+          fragmentedChunks = null
+          const text = payload.toString('utf8')
+          for (const fn of listeners.message) fn(text)
+        } else {
+          fragmentedChunks = [payload]
+        }
+        continue
+      }
+      if (opcode === 0x0 && fragmentedChunks) {
+        fragmentedChunks.push(payload)
+        if (fin) {
+          const text = Buffer.concat(fragmentedChunks).toString('utf8')
+          fragmentedChunks = null
+          for (const fn of listeners.message) fn(text)
+        }
       }
     }
   })
@@ -195,8 +248,23 @@ function attachSignaling(ws) {
         roomId,
         hostId: hostIdOf(room),
         members: [...room.members.keys()],
+        relay: true,
       })
       broadcast(room, { type: 'peer_join', peerId }, peerId)
+      return
+    }
+
+    if (msg.type === 'relay') {
+      if (!roomId || !peerId) return
+      const room = rooms.get(roomId)
+      if (!room) return
+      const to = typeof msg.to === 'string' ? msg.to.trim() : ''
+      if (to) {
+        const target = room.members.get(to)
+        if (target) target.send({ type: 'relay', from: peerId, data: msg.data })
+      } else {
+        broadcast(room, { type: 'relay', from: peerId, data: msg.data }, peerId)
+      }
       return
     }
 

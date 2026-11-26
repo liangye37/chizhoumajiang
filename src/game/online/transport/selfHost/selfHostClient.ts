@@ -6,6 +6,7 @@
 import type { SelfHostConfig } from './selfHostConfig'
 import { openSignaling, type SignalingConnection } from './selfHostSignaling'
 import { createSelfHostRoom } from './selfHostRoom'
+import { createWsRelayRoom } from './wsRelayRoom'
 
 function createLocalDataStore(namespace: string): VibeHubSDK.DataStore {
   const memory = new Map<string, string>()
@@ -112,6 +113,9 @@ export function createSelfHostClient(config: SelfHostConfig): VibeHubSDK.Client 
         const id = roomId.toUpperCase()
         const signaling = await openSignaling(config.signalingUrl, id, freshPeerId())
         lastSignaling = signaling
+        if (signaling.relaySupported && config.relayAfterMs == null && !config.forceRelay) {
+          return createWsRelayRoom(signaling)
+        }
         const room = createSelfHostRoom({
           signaling,
           iceServers: config.iceServers,

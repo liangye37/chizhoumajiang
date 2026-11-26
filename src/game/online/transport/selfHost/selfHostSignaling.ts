@@ -3,10 +3,11 @@
 // 业务消息不走这里（走 WebRTC DataChannel）。
 
 export type SignalingEvent =
-  | { type: 'welcome'; peerId: string; roomId: string; hostId: string; members: string[] }
+  | { type: 'welcome'; peerId: string; roomId: string; hostId: string; members: string[]; relay?: boolean }
   | { type: 'peer_join'; peerId: string }
   | { type: 'peer_leave'; peerId: string; hostId: string | null }
   | { type: 'signal'; from: string; data: unknown }
+  | { type: 'relay'; from: string; data: unknown }
   | { type: 'meta'; meta: Record<string, unknown> | null }
   | { type: 'error'; message: string }
 
@@ -14,6 +15,10 @@ export interface SignalingConnection {
   readonly roomId: string
   readonly peerId: string
   readonly hostId: string
+  /** 服务端是否支持直接通过 WebSocket 转发房间消息（局域网一体服务器为 true）。 */
+  readonly relaySupported?: boolean
+  /** welcome 时房间内已有成员列表。 */
+  readonly initialMembers?: readonly string[]
   send(message: Record<string, unknown>): void
   onEvent(callback: (event: SignalingEvent) => void): () => void
   onClose(callback: () => void): () => void
@@ -42,6 +47,8 @@ export function openSignaling(
     const eventHandlers = new Set<(event: SignalingEvent) => void>()
     const closeHandlers = new Set<() => void>()
     let hostId = ''
+    let relaySupported = false
+    let initialMembers: string[] = []
     let opened = false
     let settled = false
     let closed = false
@@ -70,6 +77,8 @@ export function openSignaling(
       roomId,
       peerId,
       get hostId() { return hostId },
+      get relaySupported() { return relaySupported },
+      get initialMembers() { return initialMembers },
       send(message) {
         if (opened && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify(message))
@@ -117,7 +126,12 @@ export function openSignaling(
       const event = message as Partial<SignalingEvent>
 
       if (event.type === 'welcome') {
-        hostId = (event as { hostId?: string }).hostId ?? peerId
+        const welcome = event as { hostId?: string; relay?: unknown; members?: unknown }
+        hostId = welcome.hostId ?? peerId
+        relaySupported = welcome.relay === true
+        initialMembers = Array.isArray(welcome.members)
+          ? welcome.members.filter((item): item is string => typeof item === 'string')
+          : []
         if (!settled) {
           settled = true
           clearTimeout(joinTimer)
