@@ -267,7 +267,6 @@ const presentedLlmBubbles = computed(() => props.bloodFlow
 const presentedScoreFlowEvent = computed<ScoreFlowEvent | null>(() => props.bloodFlow?null:props.scoreFlowEvent ?? (scoreFlowLabEnabled
   ? { id: -1, deltas: [{ playerIndex: 0, amount: 800 }, { playerIndex: 1, amount: -800 }] }
   : null))
-const waitsOpen = ref(false)
 const userNicknameOpen = ref(false)
 const tableReady = ref(false)
 const canInteract = computed(() => tableReady.value && Boolean(props.sendInteraction))
@@ -356,7 +355,7 @@ const bloodFlowWaitColumns = computed(() => {
 const showAutoPlay = computed(() => Boolean(props.autoPlayEnabled)
   && !['lobby', 'win-effect', 'revealing', 'settled', 'finished'].includes(props.phase))
 // 操作按钮行与倒计时同行：任一方可见时整行出现。
-const showTurnRow = computed(() => Boolean(props.actionPrompt || props.isUserTurn || props.userCurrentWaits))
+const showTurnRow = computed(() => Boolean(props.actionPrompt || props.isUserTurn))
 const tingDiscardTiles = computed(() => new Set(props.userTingOptions.map((option) => option.discard)))
 function isTingDiscard(index: number, tile: TileType) {
   return props.isUserTurn && tingDiscardTiles.value.has(tile)
@@ -366,16 +365,6 @@ function isTingDiscard(index: number, tile: TileType) {
 function isReformDiscard(index: number, tile: TileType) {
   const hint = props.bloodFlow?.reformHint
   return Boolean(hint && tile === hint.discard && !props.bloodFlow?.seats[props.user.seat].locked)
-}
-function toggleWaits() {
-  if (!props.tingHintEnabled) { waitsOpen.value = false; return }
-  if (waitsOpen.value) { waitsOpen.value = false; return }
-  if (!activeWaits.value && props.userTingOptions.length) {
-    const index = props.bloodFlow?.seats[props.user.seat].locked ? userDrawnIndex.value
-      : props.user.hand.indexOf(props.userTingOptions[0].discard!)
-    if (index >= 0) emit('selectTile', index)
-  }
-  waitsOpen.value = true
 }
 const displayedUserHand = computed(() => {
   if (props.winPresentation?.winnerIndex !== 0) return props.user.hand
@@ -462,9 +451,7 @@ watch([userIdentity, handRack], ([identity, rack], _, onCleanup) => {
   })
 }, { flush: 'post' })
 
-watch(() => props.tingHintEnabled, (enabled) => { if (!enabled) { waitsOpen.value = false; hoveredDiscard.value = null } })
-watch(() => props.userDiscardWaits, (value) => { waitsOpen.value = Boolean(props.tingHintEnabled && value) })
-watch(() => props.isUserTurn, (value) => { if (!value) waitsOpen.value = false })
+watch(() => props.tingHintEnabled, (enabled) => { if (!enabled) hoveredDiscard.value = null })
 watch(() => props.userKongs, (kongs) => { if (!kongs.length) kongPickerOpen.value = false })
 watch(() => props.actionPrompt, () => { chiPickerOpen.value = false })
 
@@ -473,15 +460,13 @@ function usesFinePointer() {
 }
 
 function previewDesktopWaits(tile: TileType, index: number) {
-  if (!usesFinePointer() || !isTingDiscard(index, tile)) return
+  if (!props.tingHintEnabled || !usesFinePointer() || !isTingDiscard(index, tile)) return
   hoveredDiscard.value = tile
-  waitsOpen.value = true
 }
 
 function clearDesktopWaits() {
   if (!usesFinePointer() || !hoveredDiscard.value) return
   hoveredDiscard.value = null
-  waitsOpen.value = false
 }
 
 function beginTileGesture(index: number, event: PointerEvent) {
@@ -500,7 +485,6 @@ function finishTileGesture(index: number, event: PointerEvent) {
     suppressTileClickUntil = performance.now() + 500
     lastTouchTap = { index: -1, time: 0 }
     hoveredDiscard.value = null
-    waitsOpen.value = false
     if (!props.bloodFlow?.seats[props.user.seat].locked || index === props.user.drawnTileIndex) emit('discard', index)
   }
 }
@@ -517,13 +501,11 @@ function handleTileActivation(index: number, event?: PointerEvent) {
   const isTouch = event?.pointerType === 'touch' || event?.pointerType === 'pen' || !usesFinePointer()
   if (!isTouch) {
     hoveredDiscard.value = null
-    waitsOpen.value = false
     emit('discard', index)
     return
   }
   if (lastTouchTap.index === index && now - lastTouchTap.time <= 360) {
     lastTouchTap = { index: -1, time: 0 }
-    waitsOpen.value = false
     emit('discard', index)
     return
   }
@@ -536,7 +518,6 @@ function clearMobileSelection(event: PointerEvent) {
   const target = event.target as HTMLElement
   if (target.closest('.hand-tile-slot, .waiting-tip, .table-controls')) return
   emit('clearSelection')
-  waitsOpen.value = false
   lastTouchTap = { index: -1, time: 0 }
 }
 
@@ -756,15 +737,12 @@ function onAvatarError(entry: GamePlayer) {
 
     <div v-if="showTurnRow || showAutoPlay || canInteract" class="table-controls" :class="{ 'kong-picker-open': kongPickerOpen || chiPickerOpen }">
       <div v-if="showTurnRow" class="turn-action-row">
-        <div v-if="bloodFlow?.reformHint && userCanHu" class="blood-flow-reform-tip" data-reform-hint="1" :title="`改张收益估算 +${bloodFlow.reformHint.gain} 点`">
+        <div v-if="tingHintEnabled && bloodFlow?.reformHint && userCanHu" class="blood-flow-reform-tip" data-reform-hint="1" :title="`改张收益估算 +${bloodFlow.reformHint.gain} 点`">
           <b>改张</b><span>打出</span><b class="reform-tile">{{ tileName(bloodFlow.reformHint.discard) }}</b>
           <span v-if="bloodFlow.reformHint.reason === 'any-wait'">→ 癞子单吊·任意听（此后每巡可胡）</span>
           <span v-else>→ 听口更宽、收益更高</span>
         </div>
         <div class="action-bar">
-          <button v-if="tingHintEnabled && (userCurrentWaits || userTingOptions.length)" class="action waiting-action" data-action-role="secondary" aria-label="查看听牌提示" :title="userCurrentWaits ? '已听牌，查看听口' : '查看打哪张可听'" :aria-expanded="waitsOpen" @click="toggleWaits">
-            <TableControlIcon name="waits" />
-          </button>
           <template v-if="actionPrompt?.type === 'claim'">
             <button v-if="actionPrompt.canHu" class="action action-badge action-hu hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
             <button v-if="!bloodFlow?.seats[user.seat].locked && actionPrompt.canPeng" class="action action-badge action-peng primary" data-action-role="primary" @click="$emit('peng')"><b>碰</b></button>
@@ -812,7 +790,7 @@ function onAvatarError(entry: GamePlayer) {
         <TableInteractionControls v-if="canInteract && sendInteraction" :send="sendInteraction" />
       </div>
     </div>
-    <div v-if="tingHintEnabled && activeWaits && waitsOpen" class="waiting-tip compact-waiting-tip" :class="{ 'blood-flow-waiting-tip': bloodFlow }">
+    <div v-if="tingHintEnabled && activeWaits" class="waiting-tip compact-waiting-tip" :class="{ 'blood-flow-waiting-tip': bloodFlow }">
       <div v-if="bloodFlow" class="blood-flow-wait-grid" :style="{ '--bf-wait-cols': bloodFlowWaitColumns, gridTemplateColumns: `repeat(${bloodFlowWaitColumns}, minmax(0, 1fr))` }">
         <div v-for="item in bloodFlowWaitTiles" :key="item.tile" class="blood-flow-wait-tile" :class="{ exhausted: item.remaining === 0 }"
           :aria-label="`${tileName(item.tile)}，自摸预估${item.multiplier ?? '未知'}倍，剩余${item.remaining}张`">
