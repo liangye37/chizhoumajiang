@@ -70,9 +70,9 @@ export function createRemoteActionController({
     const hand = user?.hand ?? []
     if (!user || !hand.length) return -1
     const meldCount = structuralMeldCount(user)
-    // 癞子/精牌集合：莲花广麻固定白板癞子；莲花麻将取翻精集合（白板始终可替代，一并保护）。
-    const jokerSet = new Set<TileType>(['white', ...state.jokerTiles.value])
-    const waitsFor = (after: TileType[]) => (state.rulesetId.value === 'lotus-legacy'
+    const isCongyang = state.rulesetId.value === 'lotus-legacy' || state.rulesetId.value === 'congyang'
+    const jokerSet = new Set<TileType>(isCongyang ? state.jokerTiles.value : ['white', ...state.jokerTiles.value])
+    const waitsFor = (after: TileType[]) => (isCongyang
       ? lotusWaitingTiles(after, meldCount, state.jokerTiles.value).length
       : waitingTiles(after, meldCount).length)
     let bestIndex = hand.length - 1

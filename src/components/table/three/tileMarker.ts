@@ -1,13 +1,11 @@
 import type { TileType } from '../../../game/core/contracts/types'
 
-export type TileMarker = 'joker' | 'wildcard' | 'laizi' | false
+export type TileMarker = 'joker' | 'wildcard' | false
 
 /**
  * Resolve the displayed marker for a face-up tile.
- * 按白板身份区分标记：
- * - 白板翻精（jokerTiles 与 wildcardTiles 都含白板）：白板本身是精 → 'joker'（精）
- * - 莲花麻将替身（仅 wildcardTiles 含白板）：可代本局精牌 → 'wildcard'（替）
- * - 莲花广麻白板癞子（仅 jokerTiles 含白板）：万能牌 → 'laizi'（癞）
+ * - jokerTiles（钻牌，含白板被翻为钻牌时）→ 'joker'（钻）
+ * - wildcardTiles（替身牌，如红中）→ 'wildcard'（替）
  */
 export function tileMarkerFor(
   tile: TileType,

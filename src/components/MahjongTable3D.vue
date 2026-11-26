@@ -528,7 +528,6 @@ onMounted(async () => {
     atlasCellUvFor: tableScene.atlasCellUvFor,
     getJokerAtlasMaterial: tableScene.getJokerAtlasMaterial,
     getWildcardAtlasMaterial: tableScene.getWildcardAtlasMaterial,
-    getLaiziAtlasMaterial: tableScene.getLaiziAtlasMaterial,
     getZhongAtlasMaterial: tableScene.getZhongAtlasMaterial,
     resolveFace: (tile) => {
       const redSub = tile === 'red' ? substitutedRedFace() : null
@@ -536,7 +535,6 @@ onMounted(async () => {
     },
     isJoker: (tile) => tileMarkerFor(tile, props.jokerTiles, props.wildcardTiles) === 'joker',
     isWildcard: (tile) => tileMarkerFor(tile, props.jokerTiles, props.wildcardTiles) === 'wildcard',
-    isLaizi: (tile) => tileMarkerFor(tile, props.jokerTiles, props.wildcardTiles) === 'laizi',
     contactShadowY: animeTable ? 0.075 : undefined,
   })
   tableTiles = createTableTilePresenter({

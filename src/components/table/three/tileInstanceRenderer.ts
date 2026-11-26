@@ -9,14 +9,12 @@ interface TileInstanceRendererOptions {
   getAtlasMaterial(): THREE.Material
   getJokerAtlasMaterial?: () => THREE.Material
   getWildcardAtlasMaterial?: () => THREE.Material
-  getLaiziAtlasMaterial?: () => THREE.Material
   getZhongAtlasMaterial?: () => THREE.Material
   getAtlasCapGeometry(): THREE.BufferGeometry
   atlasCellUvFor(tile: TileType): { u: number; v: number }
   resolveFace?: (tile: TileType) => { face: TileType; isZhong?: boolean }
   isJoker?: (tile: TileType) => boolean
   isWildcard?: (tile: TileType) => boolean
-  isLaizi?: (tile: TileType) => boolean
   /** 二次元接触阴影：传入牌下阴影所在的桌面 Y（如 0.075），为每张牌铺一块柔和贴片阴影。 */
   contactShadowY?: number
 }
@@ -50,7 +48,6 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
   let atlasCapMesh: THREE.InstancedMesh | null = null
   let jokerAtlasCapMesh: THREE.InstancedMesh | null = null
   let wildcardAtlasCapMesh: THREE.InstancedMesh | null = null
-  let laiziAtlasCapMesh: THREE.InstancedMesh | null = null
   let zhongAtlasCapMesh: THREE.InstancedMesh | null = null
   let shadowMesh: THREE.InstancedMesh | null = null
   let atlasUvAttribute: THREE.InstancedBufferAttribute | null = null
@@ -59,15 +56,12 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
   let jokerAtlasUvData: Float32Array | null = null
   let wildcardAtlasUvAttribute: THREE.InstancedBufferAttribute | null = null
   let wildcardAtlasUvData: Float32Array | null = null
-  let laiziAtlasUvAttribute: THREE.InstancedBufferAttribute | null = null
-  let laiziAtlasUvData: Float32Array | null = null
   let zhongAtlasUvAttribute: THREE.InstancedBufferAttribute | null = null
   let zhongAtlasUvData: Float32Array | null = null
   let backCapCount = 0
   let atlasCapCount = 0
   let jokerAtlasCapCount = 0
   let wildcardAtlasCapCount = 0
-  let laiziAtlasCapCount = 0
   let zhongAtlasCapCount = 0
   let instanceCount = 0
   const matrix = new THREE.Matrix4()
@@ -98,7 +92,6 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
       && atlasCapMesh?.parent === options.scene
       && jokerAtlasCapMesh?.parent === options.scene
       && wildcardAtlasCapMesh?.parent === options.scene
-      && laiziAtlasCapMesh?.parent === options.scene
       && zhongAtlasCapMesh?.parent === options.scene
       && (options.contactShadowY == null || shadowMesh?.parent === options.scene),
     )
@@ -125,10 +118,6 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
       )
       wildcardAtlasCapMesh = createCap(
         options.getWildcardAtlasMaterial?.() ?? options.getAtlasMaterial(),
-        options.ownDynamic(options.getAtlasCapGeometry().clone()),
-      )
-      laiziAtlasCapMesh = createCap(
-        options.getLaiziAtlasMaterial?.() ?? options.getAtlasMaterial(),
         options.ownDynamic(options.getAtlasCapGeometry().clone()),
       )
       zhongAtlasCapMesh = createCap(
@@ -161,9 +150,6 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
       wildcardAtlasUvData = new Float32Array(INSTANCE_CAPACITY * 2)
       wildcardAtlasUvAttribute = new THREE.InstancedBufferAttribute(wildcardAtlasUvData, 2)
       wildcardAtlasCapMesh.geometry.setAttribute('aUvOffset', wildcardAtlasUvAttribute)
-      laiziAtlasUvData = new Float32Array(INSTANCE_CAPACITY * 2)
-      laiziAtlasUvAttribute = new THREE.InstancedBufferAttribute(laiziAtlasUvData, 2)
-      laiziAtlasCapMesh.geometry.setAttribute('aUvOffset', laiziAtlasUvAttribute)
       zhongAtlasUvData = new Float32Array(INSTANCE_CAPACITY * 2)
       zhongAtlasUvAttribute = new THREE.InstancedBufferAttribute(zhongAtlasUvData, 2)
       zhongAtlasCapMesh.geometry.setAttribute('aUvOffset', zhongAtlasUvAttribute)
@@ -172,7 +158,6 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
     atlasCapCount = 0
     jokerAtlasCapCount = 0
     wildcardAtlasCapCount = 0
-    laiziAtlasCapCount = 0
     zhongAtlasCapCount = 0
     instanceCount = 0
   }
@@ -204,26 +189,22 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
     const zhong = Boolean(resolved?.isZhong)
     const joker = Boolean(face && !zhong && options.isJoker?.(face))
     const wildcard = Boolean(face && !zhong && !joker && options.isWildcard?.(face))
-    const laizi = Boolean(face && !zhong && !joker && !wildcard && options.isLaizi?.(face))
     const capMesh = !shownFace ? backCapMesh!
       : zhong ? zhongAtlasCapMesh!
         : joker ? jokerAtlasCapMesh!
           : wildcard ? wildcardAtlasCapMesh!
-            : laizi ? laiziAtlasCapMesh!
-              : atlasCapMesh!
+            : atlasCapMesh!
     const capIndex = !shownFace ? backCapCount++
       : zhong ? zhongAtlasCapCount++
         : joker ? jokerAtlasCapCount++
           : wildcard ? wildcardAtlasCapCount++
-            : laizi ? laiziAtlasCapCount++
-              : atlasCapCount++
+            : atlasCapCount++
     if (shownFace) {
       const uv = options.atlasCellUvFor(shownFace)
       const uvData = zhong ? zhongAtlasUvData!
         : joker ? jokerAtlasUvData!
           : wildcard ? wildcardAtlasUvData!
-            : laizi ? laiziAtlasUvData!
-              : atlasUvData!
+            : atlasUvData!
       uvData[capIndex * 2] = uv.u
       uvData[capIndex * 2 + 1] = uv.v
     }
@@ -237,7 +218,6 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
     atlasCapMesh!.count = atlasCapCount
     jokerAtlasCapMesh!.count = jokerAtlasCapCount
     wildcardAtlasCapMesh!.count = wildcardAtlasCapCount
-    laiziAtlasCapMesh!.count = laiziAtlasCapCount
     zhongAtlasCapMesh!.count = zhongAtlasCapCount
     if (shadowMesh) shadowMesh.count = instanceCount
     baseMesh!.instanceMatrix.needsUpdate = true
@@ -245,13 +225,11 @@ export function createTileInstanceRenderer(options: TileInstanceRendererOptions)
     atlasCapMesh!.instanceMatrix.needsUpdate = true
     jokerAtlasCapMesh!.instanceMatrix.needsUpdate = true
     wildcardAtlasCapMesh!.instanceMatrix.needsUpdate = true
-    laiziAtlasCapMesh!.instanceMatrix.needsUpdate = true
     zhongAtlasCapMesh!.instanceMatrix.needsUpdate = true
     if (shadowMesh) shadowMesh.instanceMatrix.needsUpdate = true
     if (atlasUvAttribute) atlasUvAttribute.needsUpdate = true
     if (jokerAtlasUvAttribute) jokerAtlasUvAttribute.needsUpdate = true
     if (wildcardAtlasUvAttribute) wildcardAtlasUvAttribute.needsUpdate = true
-    if (laiziAtlasUvAttribute) laiziAtlasUvAttribute.needsUpdate = true
     if (zhongAtlasUvAttribute) zhongAtlasUvAttribute.needsUpdate = true
   }
 

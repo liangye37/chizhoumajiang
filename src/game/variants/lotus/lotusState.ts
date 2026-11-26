@@ -27,8 +27,8 @@ export function createLotusGameState() {
     /** 本局癞子集合（指示牌 + 同序下一张） */
     /** 实际精牌（翻精牌与顺序下一张）；白板翻精时白板也在集合内（作精替代任意牌）。 */
     jokerTiles: ref<TileType[]>([]),
-    /** 可替代精牌的实体牌；它不是精牌。 */
-    wildcardTiles: ref<TileType[]>(['white']),
+    /** 可替代钻牌的实体牌（红中）；它不是钻牌。 */
+    wildcardTiles: ref<TileType[]>(['red']),
     /** 3D 牌山断点（wall[0] 的物理张位） */
     wallBreakIndex: ref(0),
     /** 翻精所在物理墩（0..67），供 3D 在牌山上翻出指示牌；翻精前为 null */

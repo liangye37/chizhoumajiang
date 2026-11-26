@@ -19,8 +19,9 @@ describe('3D tile markers', () => {
     expect(tileMarkerFor('white', ['m3', 'm4'], ['white'])).toBe('wildcard')
   })
 
-  it('marks white as 癞 when it is the guangma white-joker (joker only)', () => {
-    expect(tileMarkerFor('white', ['white'], [])).toBe('laizi')
+  it('marks white as 钻 (joker) when white is the flipped joker tile', () => {
+    expect(tileMarkerFor('white', ['white'], ['red'])).toBe('joker')
+    expect(tileMarkerFor('white', ['white'], [])).toBe('joker')
   })
 
   it('does not mark white when it is not a joker or substitute', () => {
