@@ -36,7 +36,7 @@ describe('seat winds', () => {
 
 describe('green discard tile layout', () => {
   it('places green discards beside each seat hand in 4-per-row orientation', () => {
-    expect(greenDiscardTileLayout(0, 0)).toEqual({ x: 7.6, z: 7.3, rotation: 0 })
+    expect(greenDiscardTileLayout(0, 0)).toEqual({ x: 7.6, z: 9.2, rotation: 0 })
     expect(greenDiscardTileLayout(0, 1).x).toBeCloseTo(8.38)
     expect(greenDiscardTileLayout(1, 0)).toEqual({ x: 9.6, z: -6.4, rotation: Math.PI / 2 })
     expect(greenDiscardTileLayout(2, 0)).toEqual({ x: -5.8, z: -9.6, rotation: Math.PI })

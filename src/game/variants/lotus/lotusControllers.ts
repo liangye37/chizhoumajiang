@@ -19,6 +19,7 @@ import { createPendingAction } from '../../shared/runtime/pendingAction'
 
 export type LotusTurnAction =
   | { kind: 'win' }
+  | { kind: 'paofeng' }
   | { kind: 'added-kong'; meldIndex: number }
   | { kind: 'concealed-kong'; tile: TileType }
   | { kind: 'wind-kong' }
@@ -247,6 +248,10 @@ export class LotusHumanController implements LotusController {
   }
   resolveWin() {
     if (!this.turnAction.resolve({ kind: 'win' })) return
+    this._cleanupTurn()
+  }
+  resolvePaofeng() {
+    if (!this.turnAction.resolve({ kind: 'paofeng' })) return
     this._cleanupTurn()
   }
   resolveAddedKong(meldIndex: number) {

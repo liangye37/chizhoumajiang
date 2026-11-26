@@ -109,6 +109,7 @@ function isPlayer(value: unknown): value is ServerPlayerDto {
     && Array.isArray(value.hand) && value.hand.every((tile) => tile === null || isTile(tile))
     && isArrayOf(value.discards, isTile)
     && isOptional(value.greenDiscards, (item): item is TileType[] => isArrayOf(item, isTile))
+    && isOptional(value.paofengPair, (item): item is TileType[] => isArrayOf(item, isTile))
     && isArrayOf(value.melds, isMeld)
     && isIntegerAtLeast(value.redCount, 0) && isIntegerAtLeast(value.drawnTileIndex, -1)
 }

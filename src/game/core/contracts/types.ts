@@ -32,6 +32,7 @@ export interface GamePlayer {
   concealedTileCount?: number
   discards: TileType[]
   greenDiscards?: TileType[]
+  paofengPair?: TileType[]
   melds: Meld[]
   redCount: number
   drawnTileIndex: number

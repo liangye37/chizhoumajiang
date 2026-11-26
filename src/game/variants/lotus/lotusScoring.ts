@@ -19,16 +19,23 @@ export function applyWinScore(
   settlement: WinSettlement,
   dealerIndex: number,
   sourceIndex: number | null = null,
+  caughtPaofengSeat?: number,
 ): number {
   let totalWon = 0
-  players.forEach((player, index) => {
-    if (index === winnerIndex) return
+  const payments = players.map((_player, index) => {
+    if (index === winnerIndex) return 0
     const basePayment = index === dealerIndex ? settlement.dealerPays : settlement.nonDealerPays
-    const payment = !settlement.flat && index === sourceIndex ? basePayment * 2 : basePayment
-    if (payment <= 0) return
-    player.score -= payment
-    totalWon += payment
+    return !settlement.flat && index === sourceIndex ? basePayment * 2 : basePayment
   })
+  totalWon = payments.reduce((sum, amount) => sum + amount, 0)
+  if (caughtPaofengSeat != null && players[caughtPaofengSeat] && caughtPaofengSeat !== winnerIndex) {
+    players[caughtPaofengSeat].score -= totalWon
+  } else {
+    players.forEach((player, index) => {
+      const payment = payments[index]
+      if (payment > 0) player.score -= payment
+    })
+  }
   players[winnerIndex].score += totalWon
   return totalWon
 }

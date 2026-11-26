@@ -3,7 +3,7 @@ import type { LotusController } from './lotusControllers'
 import type { LotusGameState } from './lotusState'
 import type { createLotusTurnOrchestrator } from './lotusTurnOrchestrator'
 import { sortTilesWithJokers } from '../../core/rules/tiles'
-import { takeLotusTailTile } from './lotusWall'
+import { DEAD_WALL_TILES, takeLotusTailTile } from './lotusWall'
 import { isSpecialTile } from './lotusRules'
 import type { FollowDealerTracker } from '../../shared/runtime/followDealer'
 import type { GamePlayer, TileType } from '../../core/contracts/types'
@@ -32,6 +32,7 @@ export function createLotusTileFlow(options: LotusTileFlowOptions) {
     ...options,
     sortHand: (hand) => sortTilesWithJokers(hand, options.state.jokerTiles.value),
     getTurnFlow: options.getTurnOrchestrator,
+    minRemainingTiles: DEAD_WALL_TILES,
     takeTailTile: takeLotusTailTile,
     discardInterceptor: async (playerIndex, tile) => {
       if (isSpecialTile(tile, options.state.jokerTiles.value) && !options.state.jokerTiles.value.includes(tile)) {

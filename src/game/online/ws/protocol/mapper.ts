@@ -25,6 +25,7 @@ export function mapPlayersToLocal(players: ServerPlayerDto[], localServerSeat: n
     .map((player) => ({
       ...player,
       greenDiscards: [...(player.greenDiscards ?? [])],
+      paofengPair: [...(player.paofengPair ?? [])],
       hand: player.hand.filter((tile): tile is NonNullable<typeof tile> => tile !== null),
       concealedTileCount: player.hand.length,
       avatar: player.avatar || defaultAvatarForSeat(player.seat),

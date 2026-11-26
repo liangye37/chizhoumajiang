@@ -142,6 +142,7 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
         kongBloom: Boolean(endOptions.kongBloom),
         tianhu: Boolean(endOptions.tianhu),
         dihu: Boolean(endOptions.dihu),
+        paofengSuccess: Boolean(endOptions.paofengSuccess),
       }
       const ordinaryJokers = !endOptions.selfDraw && endOptions.winTile
         && (state.jokerTiles.value.includes(endOptions.winTile) || state.wildcardTiles.value.includes(endOptions.winTile))
@@ -160,10 +161,17 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
       const sourceIndex = !flags.selfDraw && !flags.robbedKong && !flags.kongBloom
         ? (endOptions.sourceFrom ?? null)
         : null
-      const totalWon = ruleset.score.applyWinSettlement
-        ? ruleset.score.applyWinSettlement(state.players, winnerIndex, score.settlement, state.dealer.value, sourceIndex)
-        : applyWinScore(state.players, winnerIndex, score.settlement, state.dealer.value, sourceIndex)
-      const winType = endOptions.tianhu ? 'tianhu'
+      if (endOptions.caughtPaofengSeat != null) {
+        score.patterns.push({ label: '捉跑风（三倍包赔）', multiplier: 3 })
+      }
+      const totalWon = endOptions.caughtPaofengSeat != null
+        ? applyWinScore(state.players, winnerIndex, score.settlement, state.dealer.value, sourceIndex, endOptions.caughtPaofengSeat)
+        : (ruleset.score.applyWinSettlement
+            ? ruleset.score.applyWinSettlement(state.players, winnerIndex, score.settlement, state.dealer.value, sourceIndex)
+            : applyWinScore(state.players, winnerIndex, score.settlement, state.dealer.value, sourceIndex))
+      const winType = endOptions.caughtPaofengSeat != null ? 'caught-paofeng'
+        : endOptions.paofengSuccess ? 'paofeng'
+        : endOptions.tianhu ? 'tianhu'
         : endOptions.dihu ? 'dihu'
         : endOptions.robbedKong ? 'robbed-kong'
         : flags.selfDraw ? 'self-draw'
@@ -205,7 +213,7 @@ export function createLotusSettlement(options: LotusSettlementOptions) {
     if (!winner) return false
     const winningHand = endOptions.robbedKong || !endOptions.selfDraw
       ? (endOptions.winTile ? [...winner.hand, endOptions.winTile] : null)
-      : winner.hand
+      : (endOptions.winHand ?? winner.hand)
     return winningHand !== null
       && ruleset.win.isWinningHand(
         winningHand,

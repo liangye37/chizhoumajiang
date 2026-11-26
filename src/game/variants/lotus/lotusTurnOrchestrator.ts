@@ -5,7 +5,8 @@ import { sortTilesWithJokers } from '../../core/rules/tiles'
 import { PACE_MS } from '../../core/local/localGameConfig'
 import type { TileType } from '../../core/contracts/types'
 import type { LotusController, LotusHuAction, LotusTurnContext } from './lotusControllers'
-import { canChi, canWinOnDiscard, isSpecialTile, matchingCount, type ChiMeld, LOTUS_RULESET, windKong } from './lotusRules'
+import { canChi, canWinOnDiscard, findPaofengPair, isSpecialTile, matchingCount, type ChiMeld, LOTUS_RULESET, windKong } from './lotusRules'
+import { DEAD_WALL_TILES } from './lotusWall'
 import type { LotusEndGameOptions, LotusGameState } from './lotusState'
 import type { LotusTurnAction } from './lotusControllers'
 import { createTurnRunner, type TurnOptions } from '../../shared/runtime/turnRunner'
@@ -89,6 +90,18 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
   }
 
   function beginTurn(playerIndex: number, turnOptions: TurnOptions = {}) {
+    if (state.paofengSeat.value === playerIndex && !hasSettled()) {
+      const pfPlayer = state.players[playerIndex]
+      const winHand = [...pfPlayer.hand, ...(pfPlayer.paofengPair ?? [])]
+      state.paofengSeat.value = null
+      options.announce(`${pfPlayer.name} 跑风成功!`, 'gold')
+      options.endGame(playerIndex, {
+        selfDraw: true,
+        paofengSuccess: true,
+        winHand,
+      })
+      return
+    }
     return runner.beginTurn(playerIndex, turnOptions)
   }
 
@@ -181,7 +194,11 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
           : [],
         distance: seatDistance(from, playerIndex),
       }))
-      .filter(({ playerIndex, count, chiOptions }) => playerIndex !== from && (count >= 2 || chiOptions.length > 0))
+      .filter(({ playerIndex, count, chiOptions }) => (
+        playerIndex !== from
+        && playerIndex !== state.paofengSeat.value
+        && (count >= 2 || chiOptions.length > 0)
+      ))
       // 全局优先级：杠(1) > 碰(2) > 吃(3)，同级再按座位距离（对齐后端 find_claims）。
       .sort((a, b) => {
         const pa = a.count >= 3 ? 1 : a.count >= 2 ? 2 : 3
@@ -398,7 +415,16 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
       options.later(() => { void offerRobKong(nextRobber) }, PACE_MS.betweenRobKongs)
       return
     }
-    options.announce(`${state.players[robberIndex].name} 抢杠胡!`, 'red')
+    const caughtPaofengSeat = state.paofengSeat.value !== null && robberIndex !== state.paofengSeat.value
+      ? state.paofengSeat.value
+      : undefined
+    if (caughtPaofengSeat !== undefined) state.paofengSeat.value = null
+    options.announce(
+      caughtPaofengSeat !== undefined
+        ? `${state.players[robberIndex].name} 捉!`
+        : `${state.players[robberIndex].name} 抢杠胡!`,
+      'red',
+    )
     state.pendingKong.value = null
     options.later(() => {
       options.endGame(robberIndex, {
@@ -407,6 +433,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
         winTile: kong.tile,
         winHand: [...robber.hand, kong.tile],
         sourceFrom: kong.playerIndex,
+        ...(caughtPaofengSeat !== undefined ? { caughtPaofengSeat } : {}),
       })
     }, PACE_MS.betweenRobKongs)
   }
@@ -430,6 +457,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     controllers: options.controllers,
     drawFor: options.drawFor,
     endDraw: options.endDraw,
+    minRemainingTiles: DEAD_WALL_TILES,
     buildContext: (player, playerIndex, turnOptions, kongBloom) => ({
       ...llm.meta(playerIndex, 'turn'),
       hand: player.hand,
@@ -455,7 +483,7 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
     requestTurn: (controller, context) => controller.requestTurn(context as LotusTurnContext),
     handleAction: async (action, playerIndex, player, turnOptions, api) => {
         switch (action.kind) {
-          case 'win':
+          case 'win': {
             if (!ruleset.win.isWinningHand(player.hand, options.structuralMeldCount(playerIndex), {
               jokers: state.jokerTiles.value,
               jokerSubstitutes: state.wildcardTiles.value,
@@ -463,11 +491,42 @@ export function createLotusTurnOrchestrator(options: LotusTurnOrchestratorOption
               return options.discardTile(playerIndex, player.hand.length - 1)
             }
             interruptFollow()
-          return options.endGame(playerIndex, {
-            selfDraw: true,
-            kongBloom: api.isKongDraw(playerIndex),
-            winHand: [...player.hand],
-          })
+            const caughtPaofengSeat = state.paofengSeat.value !== null && playerIndex !== state.paofengSeat.value
+              ? state.paofengSeat.value
+              : undefined
+            if (caughtPaofengSeat !== undefined) {
+              state.paofengSeat.value = null
+              options.announce(`${player.name} 捉!`, 'red')
+            }
+            return options.endGame(playerIndex, {
+              selfDraw: true,
+              kongBloom: api.isKongDraw(playerIndex),
+              winHand: [...player.hand],
+              ...(caughtPaofengSeat !== undefined ? { caughtPaofengSeat } : {}),
+            })
+          }
+          case 'paofeng': {
+            const pair = state.paofengSeat.value === null && !turnOptions.skipDraw
+              ? findPaofengPair(player.hand, options.structuralMeldCount(playerIndex), state.jokerTiles.value)
+              : null
+            if (!pair) {
+              return options.discardTile(playerIndex, player.hand.length - 1)
+            }
+            interruptFollow()
+            for (const tile of pair) {
+              const idx = player.hand.indexOf(tile)
+              if (idx >= 0) player.hand.splice(idx, 1)
+            }
+            player.paofengPair = [...pair]
+            player.drawnTileIndex = -1
+            player.hand = sortTilesWithJokers(player.hand, state.jokerTiles.value)
+            state.paofengSeat.value = playerIndex
+            options.announce(`${player.name} 跑风!`, 'gold')
+            if (!isLocalLlmSeat(playerIndex)) options.tableContext.playSound('dapai.mp3', 0.85)
+            const nextPlayer = (playerIndex + 1) % state.players.length
+            options.later(() => { void beginTurn(nextPlayer) }, PACE_MS.afterDiscardToNextTurn)
+            return
+          }
           case 'added-kong':
             if (!Number.isInteger(action.meldIndex)
               || !player.melds[action.meldIndex]

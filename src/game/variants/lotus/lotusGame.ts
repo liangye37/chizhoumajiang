@@ -51,7 +51,7 @@ import { structuralMeldCount } from './lotusSelectors'
 import { createLotusGameState, type LotusEndGameOptions } from './lotusState'
 import { createLotusTileFlow } from './lotusTileFlow'
 import { createLotusTurnOrchestrator } from './lotusTurnOrchestrator'
-import { LOTUS_RULESET } from './lotusRules'
+import { findPaofengPair, LOTUS_RULESET } from './lotusRules'
 import type { RuleSet } from '../../core/rules/ruleset'
 import { createFollowDealerTracker } from '../../shared/runtime/followDealer'
 
@@ -627,7 +627,7 @@ export function useLotusGame({
       const player = state.players[playerIndex]
       player.greenDiscards = [...(player.greenDiscards ?? []), tile]
       await playPresentationSoundAndWait('dapai.mp3', 0.8)
-      if (state.wall.value.length) {
+      if (state.wall.value.length > 14) {
         if (await tileFlowExecutor.reserveHeadAndDrawTail(playerIndex)) {
           turnOrchestrator.markDrawSource(playerIndex, true)
         }
@@ -791,9 +791,16 @@ export function useLotusGame({
     }
     matchLifecycle.returnToLobby()
   }
+  const userCanPaofeng = computed(() => {
+    if (state.paofengSeat.value !== null || !selectors.isUserTurn.value || !state.userDrewThisTurn.value) return false
+    const user = selectors.user.value
+    if (!user) return false
+    return findPaofengPair(user.hand, structuralMeldCount(user), state.jokerTiles.value) !== null
+  })
   const capabilities = computed(() => ({
     chi: { choose: playerActions.userChi },
     windKong: { available: selectors.userHasWindKong.value, execute: playerActions.userWindKong },
+    paofeng: { available: userCanPaofeng.value, execute: playerActions.userPaofeng },
     lotusTable: {
       flipTile: state.flipTile.value,
       jokerTiles: state.jokerTiles.value,

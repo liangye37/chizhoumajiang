@@ -72,6 +72,7 @@ interface Props {
   userDiscardWaits: WaitInfo | null
   userKongs: TileType[]
   userHasWindKong: boolean
+  userCanPaofeng?: boolean
   /** 多人联机模式：显示托管开关按钮 */
   autoPlayEnabled?: boolean
   /** 当前是否已开启托管（联机自动出牌/过牌） */
@@ -113,6 +114,7 @@ const emit = defineEmits<{
   gang: [tile: TileType]
   hu: []
   windKong: []
+  paofeng: []
   toggleAutoPlay: []
   nextRound: []
   returnToLobby: []
@@ -712,7 +714,7 @@ function onAvatarError(entry: GamePlayer) {
       <div v-if="announcement" :key="announcement.id" class="announcement" :class="announcement.tone"><span>{{ announcement.text }}</span></div>
     </Transition>
     <Transition name="opening-cue" mode="out-in">
-      <div v-if="openingStage === 'start'" key="start" class="opening-overlay start-cue"><span>{{ matchName }} · {{ roundLabel }}</span><strong>对局开始</strong><i></i></div>
+      <div v-if="openingStage === 'start'" key="start" class="opening-overlay start-cue"><span>{{ roundLabel }}</span><strong>对局开始</strong><i></i></div>
     </Transition>
 
     <section class="user-area">
@@ -768,6 +770,7 @@ function onAvatarError(entry: GamePlayer) {
           <template v-else>
             <button v-if="userKongs.length" class="action primary" data-action-role="primary" @click="toggleKongPicker"><b>{{ kongPickerOpen ? '取消' : '杠' }}</b></button>
             <button v-if="userHasWindKong" class="action primary" data-action-role="primary" @click="$emit('windKong')"><b>风杠</b></button>
+            <button v-if="userCanPaofeng" class="action primary" data-action-role="major" @click="$emit('paofeng')"><b>跑风</b></button>
             <button v-if="userCanHu" class="action hu" data-action-role="major" @click="$emit('hu')"><b>胡</b></button>
           </template>
         </div>

@@ -108,7 +108,7 @@ onBeforeUnmount(() => {
     :data-effects-enabled="effectsOn ? 'true' : 'false'"
   >
     <div v-if="hasPlayers" class="table-meta" :class="{ 'has-signal': gameMode === 'remote', 'has-signal-warning': gameMode === 'remote' && signalQuality <= signalWarningThreshold }">
-      <div class="round-info">{{ matchName }} · {{ roundLabel }}<span v-if="honba" class="round-honba"> · {{ honba }}本场</span></div>
+      <div class="round-info">{{ roundLabel }}<span v-if="honba" class="round-honba"> · {{ honba }}本场</span></div>
       <div class="base-score-badge">
         <span v-if="gameMode === 'remote' && roomId" class="badge-room"><span class="badge-room-label">房间 </span>{{ roomId }}</span>
         <span>底分{{ baseScore }}</span>

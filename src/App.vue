@@ -14,15 +14,9 @@ import LobbyView from './components/lobby/LobbyView.vue'
 import LlmSettingsPanel from './components/llm/LlmSettingsPanel.vue'
 import SettlementOverlay from './components/settlement/SettlementOverlay.vue'
 import ReplayListView from './components/replay/ReplayListView.vue'
-import { useGame } from './game/variants/guangma/game'
 import { useLotusGame } from './game/variants/lotus/lotusGame'
-import { useBloodFlowGame } from './game/variants/lotus/bloodFlow/useBloodFlowGame'
-import { bloodFlowEnabled } from './game/variants/lotus/bloodFlow/availability'
-import { BLOOD_FLOW_CONFIG } from './game/variants/lotus/bloodFlow/config'
-import { createLocalLlmControllers, createLotusLlmControllers } from './game/llm/runtime'
+import { createLotusLlmControllers } from './game/llm/runtime'
 import { createLotusLegacyDecisionSink } from './game/replay/analysis/lotusLegacyAdapter'
-import { createLotusClassicDecisionSink } from './game/replay/analysis/lotusClassicDecisionSink'
-import { lotusClassicAnalysisConfig } from './game/replay/analysis/lotusClassicConfig'
 import { lotusLegacyAnalysisConfig } from './game/replay/analysis/lotusLegacyConfig'
 import { readLlmSettings } from './game/llm/config'
 import type { LlmControllerStats } from './game/llm/llmController'
@@ -61,7 +55,6 @@ import { useReplayRecorder } from './game/replay/useReplayRecorder'
 import { createAnalysisStorage } from './game/replay/analysis/storage'
 import { createAnalysisSession, reconcileAnalysisWithReplay } from './game/replay/analysis/session'
 import type { AnalysisSeatControl } from './game/replay/analysis/types'
-import { BLOOD_FLOW_AI, BLOOD_FLOW_LLM_AI } from './game/variants/lotus/bloodFlow/config'
 import type { ReplayMatch, ReplayRound } from './game/replay/types'
 
 // 规则面板只在首次打开时加载；牌桌的 Three.js 场景由 GameTableHud 延迟加载。
@@ -189,10 +182,6 @@ watch(tableThemeName, (theme) => {
  * getter 让接缝不必去调 App 的初始化顺序。
  */
 const lotusLegacyAnalysisSink = createLotusLegacyDecisionSink({ recorder: () => analysis.port })
-const lotusClassicAnalysisSink = createLotusClassicDecisionSink({ recorder: () => analysis.port })
-const localLlm = shallowRef(createLocalLlmControllers({ ...llmHook, ...lotusClassicAnalysisSink.hooks }, {
-  getThemeName: () => tableThemeName.value,
-}))
 const lotusLlm = shallowRef(createLotusLlmControllers({ ...llmHook, ...lotusLegacyAnalysisSink.hooks }, {
   getThemeName: () => tableThemeName.value,
 }))
@@ -204,11 +193,10 @@ function preferLlmTableTheme(llmEnabled: boolean) {
 }
 
 // 本地配置在 setup 阶段同步读取；无 URL 明确主题时，首屏直接采用大模型专属主题。
-preferLlmTableTheme(localLlm.value.enabled || lotusLlm.value.enabled)
+preferLlmTableTheme(lotusLlm.value.enabled)
 // 联机房间的主题仅用于该房间；返回单机时恢复进入联机前的本地主题。
 const localTableThemeName = ref<TableThemeName>(tableThemeName.value)
 // 引擎在 setup 阶段创建，保存配置时通过原地更新种子数组让下一次开局使用新的人设。
-const localLlmSeeds = localLlm.value.seeds
 const lotusLlmSeeds = lotusLlm.value.seeds
 const animeCharacterId = ref<CharacterId>(readAnimeCharacterPreference())
 // 本家头像始终是本地默认头像；二次元主题的角色头像只由 `llmAnime` 的表现层覆盖
@@ -225,14 +213,14 @@ watch(animeCharacterId, (value) => {
   localHumanSeed.characterId = saveAnimeCharacterPreference(value)
 })
 const llmStats = computed<LlmControllerStats>(() => ({
-  requests: localLlm.value.stats.requests + lotusLlm.value.stats.requests,
-  successes: localLlm.value.stats.successes + lotusLlm.value.stats.successes,
-  fallbacks: localLlm.value.stats.fallbacks + lotusLlm.value.stats.fallbacks,
-  messages: localLlm.value.stats.messages + lotusLlm.value.stats.messages,
-  invalidActions: localLlm.value.stats.invalidActions + lotusLlm.value.stats.invalidActions,
-  reasoningRequests: (localLlm.value.stats.reasoningRequests ?? 0) + (lotusLlm.value.stats.reasoningRequests ?? 0),
-  thinkingRequests: (localLlm.value.stats.thinkingRequests ?? 0) + (lotusLlm.value.stats.thinkingRequests ?? 0),
-  enhancedReasoningRequests: (localLlm.value.stats.enhancedReasoningRequests ?? 0) + (lotusLlm.value.stats.enhancedReasoningRequests ?? 0),
+  requests: lotusLlm.value.stats.requests,
+  successes: lotusLlm.value.stats.successes,
+  fallbacks: lotusLlm.value.stats.fallbacks,
+  messages: lotusLlm.value.stats.messages,
+  invalidActions: lotusLlm.value.stats.invalidActions,
+  reasoningRequests: lotusLlm.value.stats.reasoningRequests ?? 0,
+  thinkingRequests: lotusLlm.value.stats.thinkingRequests ?? 0,
+  enhancedReasoningRequests: lotusLlm.value.stats.enhancedReasoningRequests ?? 0,
 }))
 // ── 对局回放（只存本机 IndexedDB，不上服务器）──
 // 录制器在三个单机引擎之间共享：同一时刻只有所选玩法的引擎在跑，局序不会交错。
@@ -269,22 +257,6 @@ const replay = useReplayRecorder({
   }),
 })
 
-const localGame = useGame({
-  playSound: playEffect,
-  playSoundAndWait: playEffectAndWait,
-  // 单机对战取消回合倒计时：玩家无时限，不自动出牌/过牌
-  countdownEnabled: false,
-  aiControllers: localLlm.value.controllers ?? undefined,
-  aiPlayerSeeds: localLlmSeeds,
-  humanPlayerSeed: localHumanSeed,
-  getThemeName: () => tableThemeName.value,
-  animeFixedTts: localAnimeFixedTts,
-  recorder: replay.hooks,
-  // AI 分析记录（§9.2）：本地玩法共用同一个稳定代理；未接线的玩法只是不写记录。
-  // 这一行由协调者补（App.vue 是冻结文件，单写者；见 docs/blood-flow/design/analysis-two-variants-work-agreement.md §3.1）。
-  analysis: analysis.port,
-  analysisSink: lotusClassicAnalysisSink,
-})
 const lotusGame = useLotusGame({
   playSound: playEffect,
   playSoundAndWait: playEffectAndWait,
@@ -299,40 +271,6 @@ const lotusGame = useLotusGame({
   analysis: analysis.port,
   analysisSink: lotusLegacyAnalysisSink,
 })
-const bloodFlowGame = useBloodFlowGame({ playSound: playEffect, playSoundAndWait: playEffectAndWait,
-  countdownEnabled: false,
-  getThemeName: () => tableThemeName.value, animeFixedTts: lotusAnimeFixedTts,
-  humanPlayerSeed: localHumanSeed, aiPlayerSeeds: lotusLlmSeeds, recorder: replay.hooks,
-  // AI 分析记录：引擎拿到的是一个稳定代理（换场只换内部录制器）；关闭时为 null，零成本。
-  analysis: analysis.port })
-/**
- * 联机（P2P）分析记录开场（§6）：血流房间在拿到**本场分析区场次 id** 时调这里。
- * 房主的场次 id 就是它那份展示回放的 id；客机从房主的快照信封里取 —— 两边同一个 id，
- * 客机那份分析数据才不会在"按展示回放清单回收"时被当成悬空数据删掉（§9.2）。
- */
-function startOnlineAnalysis(detail: { matchId: string; seatControl: AnalysisSeatControl[] }) {
-  if (!analysisEnabled.value || !detail.matchId) return
-  if (analysis.active()) {
-    if (analysis.matchId() === detail.matchId) return
-    // 上一场没正常收尾（中途换场/离开房间重开）：先如实收尾，避免这一场挂到上一场名下
-    void analysis.finish().then(() => beginOnlineAnalysis(detail))
-    return
-  }
-  beginOnlineAnalysis(detail)
-}
-function beginOnlineAnalysis(detail: { matchId: string; seatControl: AnalysisSeatControl[] }) {
-  analysis.start({
-    matchId: detail.matchId,
-    rulesetId: 'lotus-blood-flow',
-    rules: BLOOD_FLOW_CONFIG,
-    rulesVersion: BLOOD_FLOW_CONFIG.version,
-    // 联机时 AI/LLM 两套配置可能来自房主/各玩家的本机设置，这里记下本机口径（§3.1）
-    aiConfig: { local: BLOOD_FLOW_AI, llm: BLOOD_FLOW_LLM_AI },
-    aiStrategy: 'source-v2',
-    // 座位口径由房间给出（**绝对座位**）：客机视角是旋转过的，不能拿本机视角的座位号来标
-    seatControl: detail.seatControl,
-  })
-}
 const vibeRemoteGame = usesWsBackend ? null : useVibeRemoteGame({
   onTableInteraction: receiveTableInteraction,
   playSound: playEffect,
@@ -342,7 +280,6 @@ const vibeRemoteGame = usesWsBackend ? null : useVibeRemoteGame({
   replayStorage: replay.storage,
   // §6 联机分析记录：本机座位/AI 座位的决策 + 房主局后下发的赛后私有复现数据
   analysis: analysis.port,
-  onAnalysisMatchId: startOnlineAnalysis,
   onLlmMessage: llmHook.onLlmMessage,
   getTableThemeName: () => tableThemeName.value,
   getCharacterId: () => animeCharacterId.value,
@@ -359,9 +296,7 @@ const wsOnline = usesWsBackend ? useWsOnline({
 }) : null
 const onlineSession = wsOnline ?? vibeRemoteGame!
 
-// 莲花麻将旧版翻精规则同时支持本地与联机对战。
 const singlePlayerOnly = computed(() => false)
-const usesLotusLocalEngine = computed(() => selectedRule.value === 'congyang')
 watch(() => onlineSession.rulesetId.value, (value) => {
   if (value === 'congyang') selectedRule.value = value
 })
@@ -386,42 +321,24 @@ const {
 // 莲花麻将专属：翻精指示牌 / 癞子集合 / 3D 牌山断点（仅本地莲花麻将模式有意义）。
 const lotusTable = computed(() => capabilities.value.lotusTable)
 const userHasWindKong = computed(() => capabilities.value.windKong?.available ?? false)
+const userCanPaofeng = computed(() => capabilities.value.paofeng?.available ?? false)
 const userChi = (optionIndex: number) => capabilities.value.chi?.choose(optionIndex)
 const userWindKong = () => capabilities.value.windKong?.execute()
+const userPaofeng = () => capabilities.value.paofeng?.execute()
 const flipTile = computed(() => lotusTable.value?.flipTile ?? null)
-// 广麻固定以白板为癞子；莲花麻将将精牌与白板替代能力分开传给界面。
-// 联机 lotus-classic 快照不下发精牌（jokerTiles 为空数组），需兜底为白板癞子，
-// 否则多人模式下白板无「癞」标记。莲花麻将（lotus-legacy）的精牌由快照下发，不受影响。
-const jokerTiles = computed<TileType[]>(() => {
-  const jokers = lotusTable.value?.jokerTiles
-  return jokers && jokers.length ? jokers : ['white']
-})
+const jokerTiles = computed<TileType[]>(() => lotusTable.value?.jokerTiles ?? [])
 const wildcardTiles = computed<TileType[]>(() => lotusTable.value?.wildcardTiles ?? [])
 const wallBreakIndex = computed(() => lotusTable.value?.wallBreakIndex)
 const flipStack = computed(() => lotusTable.value?.flipStack ?? undefined)
 const remoteRulesetId = computed(() => onlineSession.rulesetId.value)
-const remoteSecondDice = computed(() => wsOnline ? wsOnline.secondDice.value
-  : vibeRemoteGame!.rulesetId.value === 'lotus-blood-flow' ? vibeRemoteGame!.bloodFlowPort.secondDice.value ?? undefined : vibeRemoteGame!.secondDice.value)
-// 单机莲花麻将第二次掷骰（二骰）；掷出前为 null，不显示角标。
+const remoteSecondDice = computed(() => wsOnline ? wsOnline.secondDice.value : vibeRemoteGame!.secondDice.value)
+// 单机池州麻将第二次掷骰（二骰）；掷出前为 null，不显示角标。
 const lotusSecondDice = computed<[number, number] | undefined>(() => lotusGame.secondDice.value ?? undefined)
 
-// 开发期杠测试入口：仅本地模式注入状态（联机由服务端权威，不适用）；仅对莲花广麻生效。
-const debugKong = (mode: 'concealed' | 'added' | 'both') => {
-  if (gameMode.value !== 'local' || singlePlayerOnly.value) return
-  localGame.debugPreviewKong(mode)
-}
-const debugFourRed = () => {
-  if (gameMode.value !== 'local' || singlePlayerOnly.value) return
-  localGame.debugPreviewFourRed()
-}
-const debugPreviewWin = (winnerIndex = 0, options: { robbedKong?: boolean } = {}) => {
-  if (gameMode.value !== 'local' || singlePlayerOnly.value) return
-  localGame.debugPreviewWin(winnerIndex, options)
-}
-const debugPreviewDraw = () => {
-  if (gameMode.value !== 'local' || singlePlayerOnly.value) return
-  localGame.debugPreviewDraw()
-}
+const debugKong = (_mode: 'concealed' | 'added' | 'both') => {}
+const debugFourRed = () => {}
+const debugPreviewWin = (_winnerIndex = 0, _options: { robbedKong?: boolean } = {}) => {}
+const debugPreviewDraw = () => {}
 
 // ── 联机模式状态（独立站 WS / VibeHub P2P）──────────────────
 const {
@@ -460,7 +377,6 @@ watch(gameMode, (mode, previousMode) => {
 }, { flush: 'sync' })
 
 function startGameWithAudio() {
-  if (selectedRule.value === 'lotus-blood-flow' && !bloodFlowEnabled('local')) return
   llmOpen.value = false
   resetTableReady()
   startBgm()
@@ -638,16 +554,6 @@ function applyLlmSettings() {
   // 保存事件只会在大厅触发；运行中的对局不会被切换模型打断。
   if (!showLobby.value || gameMode.value !== 'local') return
 
-  const nextLocalLlm = createLocalLlmControllers({ ...llmHook, ...lotusClassicAnalysisSink.hooks }, {
-    getThemeName: () => tableThemeName.value,
-  })
-  localGame.replaceAiControllers(nextLocalLlm.controllers)
-  localLlmSeeds.splice(0, localLlmSeeds.length, ...nextLocalLlm.seeds)
-  nextLocalLlm.seeds = localLlmSeeds
-  localLlm.value = nextLocalLlm
-
-  // 重建控制器时**必须继续带上分析接缝的钩子**，否则保存一次 LLM 设置之后，翻精癞子的模型请求
-  // 就再也不入账了（接缝本身是 App 侧创建一次的，不必重建）。
   const nextLotusLlm = createLotusLlmControllers({ ...llmHook, ...lotusLegacyAnalysisSink.hooks }, {
     getThemeName: () => tableThemeName.value,
   })
@@ -656,7 +562,7 @@ function applyLlmSettings() {
   nextLotusLlm.seeds = lotusLlmSeeds
   lotusLlm.value = nextLotusLlm
 
-  preferLlmTableTheme(nextLocalLlm.enabled || nextLotusLlm.enabled)
+  preferLlmTableTheme(nextLotusLlm.enabled)
 }
 // 真人座位集合（用于结算页举报按钮）：本地模式仅本家（seat 0）为真人；
 // 远程模式以 P2P 房间的真人座位为准（AI 补位不在 roomSeats 中）。
@@ -789,6 +695,7 @@ function changeTableTheme(theme: TableThemeName) {
         :user-discard-waits="userDiscardWaits"
         :user-kongs="userKongs"
         :user-has-wind-kong="userHasWindKong"
+        :user-can-paofeng="userCanPaofeng"
         :auto-play-enabled="gameMode === 'remote'"
         :auto-play="remoteAutoPlay"
         :llm-bubbles="llmBubbles"
@@ -815,6 +722,7 @@ function changeTableTheme(theme: TableThemeName) {
         @gang="userGang"
         @hu="userHu"
         @wind-kong="userWindKong"
+        @paofeng="userPaofeng"
         @toggle-auto-play="toggleAutoPlay"
         @ready="handleTableReady"
         @next-round="nextRound"

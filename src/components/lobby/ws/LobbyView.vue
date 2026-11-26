@@ -198,7 +198,7 @@ function closeDialog() {
             @select-match="openPicker('match')"
             @select-rule="openPicker('rule')"
           />
-          <button class="start-button" data-action-role="primary" @click="$emit('startLocal')"><b>开始{{ matchOption.name }}</b><span>{{ ruleOption.name }} · 四人对局</span></button>
+          <button class="start-button" data-action-role="primary" @click="$emit('startLocal')"><b>开始对局</b><span>{{ ruleOption.name }} · 四人对局</span></button>
         </template>
 
         <div v-else class="remote-lobby">
@@ -340,7 +340,7 @@ function closeDialog() {
       />
 
       <MatchTypePicker v-else-if="dialog === 'match'" :model-value="selectedMatch" @close="closePicker" @confirm="selectMatch" />
-      <RuleVariantPicker v-else :model-value="selectedRule" :allow-blood-flow="bloodFlowEnabled(gameMode === 'local' ? 'local' : 'ws')" @close="closePicker" @confirm="selectRule" @view-rules="viewRules" />
+      <RuleVariantPicker v-else :model-value="selectedRule" @close="closePicker" @confirm="selectRule" @view-rules="viewRules" />
     </LobbyDialog>
 
   </section>

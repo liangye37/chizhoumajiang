@@ -36,6 +36,7 @@ export interface TurnRunnerOptions<
   controllers: C[]
   drawFor(playerIndex: number, fromTail?: boolean): Promise<boolean>
   endDraw(): unknown
+  minRemainingTiles?: number
   buildContext(player: GamePlayer, playerIndex: number, options: TurnOptions, kongBloom: boolean): unknown
   requestTurn(controller: C, context: unknown): Promise<A>
   handleAction(
@@ -63,7 +64,7 @@ export function createTurnRunner<S extends TurnRunnerState, C, A>(
 
   async function beginTurn(playerIndex: number, turnOptions: TurnOptions = {}) {
     if (hasSettled()) return
-    if (!state.wall.value.length) return options.endDraw()
+    if (state.wall.value.length <= (options.minRemainingTiles ?? 0)) return options.endDraw()
     state.currentPlayer.value = playerIndex
     state.userDrewThisTurn.value = false
     state.phase.value = 'drawing'

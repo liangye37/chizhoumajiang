@@ -9,6 +9,7 @@ import {
   computeJokers,
   concealedKongs,
   evaluateBasePattern,
+  findPaofengPair,
   isAnyWait,
   isQiXingShiSanLan,
   isSevenPairs,
@@ -21,6 +22,7 @@ import {
   windKong,
   winPayments,
 } from './lotusRules'
+import { applyWinScore } from './lotusScoring'
 
 // 通用癞子（避免出现在绝大多数构造手牌中）
 const JOKERS: TileType[] = ['white', 'red']
@@ -352,5 +354,45 @@ describe('枞阳禁止点炮胡与听任意仅自摸', () => {
     expect(canRobKong(ANY_WAIT, 'm6', 0, FAN_JOKERS)).toBe(false)
     expect(canRobKong(PLAIN_TENPAI, 's7', 0, FAN_JOKERS)).toBe(true)
     expect(canRobKong(PLAIN_TENPAI, 'p4', 0, FAN_JOKERS)).toBe(false)
+  })
+})
+
+describe('跑风规则', () => {
+  it('3+3+3+3+2 且将牌对子含真钻牌时可发动跑风（含双钻）', () => {
+    const hand: TileType[] = ['m1', 'm2', 'm3', 's1', 's2', 's3', 'p1', 'p2', 'p3', 'east', 'east', 'east', 'white', 's7']
+    expect(findPaofengPair(hand, 0, ['white'])).toEqual(['white', 's7'])
+
+    const doubleJoker: TileType[] = ['m1', 'm2', 'm3', 's1', 's2', 's3', 'p1', 'p2', 'p3', 'east', 'east', 'east', 'white', 'white']
+    const doublePair = findPaofengPair(doubleJoker, 0, ['white'])
+    expect(doublePair).not.toBeNull()
+    expect(doublePair!.includes('white')).toBe(true)
+  })
+
+  it('红中不是钻牌时红中+非钻牌不可跑风；红中是钻牌时红中+任意牌可跑风', () => {
+    const handWithRedPair: TileType[] = ['m1', 'm2', 'm3', 's1', 's2', 's3', 'p1', 'p2', 'p3', 'east', 'east', 'east', 'red', 's7']
+    expect(findPaofengPair(handWithRedPair, 0, ['white'])).toBeNull()
+    expect(findPaofengPair(handWithRedPair, 0, ['red'])).toEqual(['red', 's7'])
+  })
+
+  it('跑风成功按双倍结算；被捉时由跑风者一人包赔三份给捉胡者', () => {
+    const hand: TileType[] = ['m1', 'm2', 'm3', 's1', 's2', 's3', 'p1', 'p2', 'p3', 'east', 'east', 'east', 'white', 's7']
+    const normal = scoreFan(hand, 0, ['white'], {
+      dealer: false, selfDraw: true, robbedKong: false, kongBloom: false, tianhu: false, dihu: false,
+    })!
+    const paofeng = scoreFan(hand, 0, ['white'], {
+      dealer: false, selfDraw: true, robbedKong: false, kongBloom: false, tianhu: false, dihu: false, paofengSuccess: true,
+    })!
+    expect(paofeng.fan).toBe(normal.fan * 2)
+    expect(paofeng.settlement.total).toBe(normal.settlement.total * 2)
+
+    const players = [0, 1, 2, 3].map((seat) => ({
+      name: `P${seat}`, avatar: '', score: 2000, seat, hand: [], discards: [], melds: [], redCount: 0, drawnTileIndex: -1,
+    }))
+    const totalWon = applyWinScore(players, 1, normal.settlement, 0, null, 2)
+    expect(totalWon).toBe(normal.settlement.total)
+    expect(players[1].score).toBe(2000 + normal.settlement.total)
+    expect(players[2].score).toBe(2000 - normal.settlement.total)
+    expect(players[0].score).toBe(2000)
+    expect(players[3].score).toBe(2000)
   })
 })

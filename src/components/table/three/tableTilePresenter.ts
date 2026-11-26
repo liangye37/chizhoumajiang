@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { isHorseForSeat, sortTilesWithJokers } from '../../../game/core/rules/tiles'
 import { meldDisplayTiles, meldSourceTileIndex } from '../../../game/core/rules/rules'
-import { addedKongTileOffset, TABLE_LAYOUT, meldTileCenter, discardTileLayout, greenDiscardTileLayout, meldTrackTransform, concealedMeldClear, concealedSideX } from '../../../game/core/presentation/tableLayout'
+import { addedKongTileOffset, TABLE_LAYOUT, meldTileCenter, discardTileLayout, greenDiscardTileLayout, paofengTileLayout, meldTrackTransform, concealedMeldClear, concealedSideX } from '../../../game/core/presentation/tableLayout'
 import { wallBreakIndexForDealer, wallStackSlot, wallTilePlacement, WALL_TOTAL } from '../../../game/core/rules/wallLayout'
 import { splitWinningTile } from '../../../game/core/presentation/winEffect'
 import type { TableActionEvent, TileType } from '../../../game/core/contracts/types'
@@ -277,6 +277,19 @@ function addGreenDiscards() {
     ;(players[playerIndex]?.greenDiscards ?? []).forEach((tile, index) => {
       if (index >= 12) return
       const transform = greenDiscardTileLayout(playerIndex, index)
+      const pos = new THREE.Vector3(transform.x, .28, transform.z + TILE_LAYER_Z)
+      const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, transform.rotation, 0))
+      addTableTile(pos, quat, tile)
+    })
+  }
+}
+
+function addPaofengTiles() {
+  const players = props.players ?? []
+  for (let playerIndex = 0; playerIndex < players.length && playerIndex < 4; playerIndex += 1) {
+    ;(players[playerIndex]?.paofengPair ?? []).forEach((tile, index) => {
+      if (index >= 2) return
+      const transform = paofengTileLayout(playerIndex, index)
       const pos = new THREE.Vector3(transform.x, .28, transform.z + TILE_LAYER_Z)
       const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, transform.rotation, 0))
       addTableTile(pos, quat, tile)
@@ -625,6 +638,7 @@ function rebuildTableTiles({ reuseInstances = false }: { reuseInstances?: boolea
   addWall()
   addHorses()
   addGreenDiscards()
+  addPaofengTiles()
   const liveSource=props.bloodFlowSourceEvent
   if(liveSource){
     const own=props.bloodFlowOwnDraw

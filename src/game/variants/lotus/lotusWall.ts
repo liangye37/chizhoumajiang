@@ -9,6 +9,8 @@ import { takeStackTailTile } from '../../shared/runtime/tileFlowExecutor'
 
 /** 翻精墩（指示牌 + 底张）整体移出牌墙：牌山 136 → 可摸 134 张。 */
 export const FLIP_STACK_REMOVED = 2
+/** 池州规则：最后 7 墩（14 张）不让摸，只剩 7 墩即流局。 */
+export const DEAD_WALL_TILES = 14
 
 /**
  * 座位 → 实际牌桌物理墙段起始墩。
@@ -34,13 +36,15 @@ export interface FlipResolution {
 }
 
 /**
- * 第一次掷骰 S：从庄家开始按逆时针座位顺序数 S，目标玩家（也是第二次
- * 掷骰者）为 (dealer + S - 1) % 4；从该玩家牌墙右侧数第 S 墩翻上层。
+ * 翻钻定位：根据二次骰子点数里较小的数 M = min(d1, d2)，
+ * 从投这次骰子的玩家（thrower）的下家面前牌堆，从左向右跳过 M 墩翻出下一墩（第 M+1 墩）上层指示牌。
  */
-export function resolveFlip(ring: TileType[], dealer: number, dice: readonly [number, number]): FlipResolution {
-  const S = dice[0] + dice[1]
-  const flipSeat = (dealer + S - 1) % 4
-  const flipStack = seatSegmentStart(flipSeat) + (S - 1)
+export function resolveFlip(ring: TileType[], thrower: number, dice: readonly [number, number]): FlipResolution {
+  const d1 = dice[0] ?? 1
+  const d2 = dice[1] ?? 1
+  const M = Math.min(d1, d2)
+  const flipSeat = (((thrower + 1) % 4) + 4) % 4
+  const flipStack = seatSegmentStart(flipSeat) + (16 - M)
   const flipTile = ring[flipStack * 2]
   return {
     flipSeat,
@@ -50,7 +54,16 @@ export function resolveFlip(ring: TileType[], dealer: number, dice: readonly [nu
   }
 }
 
-/** 第二次掷骰 T：从翻精所在墩顺时针向后数 T+1 墩为开门位置。 */
+/**
+ * 开门定位：二次骰子两颗点数之和 T = d1 + d2，
+ * 从投这次骰子的玩家（thrower）面前牌堆从右向左保留 T 墩，从此人开始顺时针摸牌。
+ */
+export function resolveOpeningFromDice(thrower: number, dice: readonly [number, number]): number {
+  const T = (dice[0] ?? 1) + (dice[1] ?? 1)
+  return (seatSegmentStart(thrower) + T) % WALL_STACKS
+}
+
+/** 兼容旧调用：从指定墩顺时针向后数 T+1 墩为开门位置。 */
 export function resolveOpeningStack(flipStack: number, secondDice: readonly [number, number]): number {
   const T = secondDice[0] + secondDice[1]
   return (flipStack + T + 1) % WALL_STACKS
@@ -124,8 +137,8 @@ export interface LotusWallResult {
 
 export function buildLotusWall(options: LotusWallOptions): LotusWallResult {
   const ring = buildRingWall(options.random)
-  const { flipStack, flipTile, jokers } = resolveFlip(ring, options.dealer, options.dice)
-  const openingStack = resolveOpeningStack(flipStack, options.secondDice)
+  const { flipStack, flipTile, jokers } = resolveFlip(ring, options.dealer, options.secondDice)
+  const openingStack = resolveOpeningFromDice(options.dealer, options.secondDice)
   return {
     wall: buildDrawOrderWall(ring, openingStack, flipStack),
     flipTile,

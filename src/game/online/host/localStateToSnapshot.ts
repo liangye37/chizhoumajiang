@@ -65,6 +65,7 @@ function toServerPlayer(player: GamePlayer, visible: boolean): ServerPlayerDto {
     seat: player.seat,
     discards: [...player.discards],
     greenDiscards: [...(player.greenDiscards ?? [])],
+    paofengPair: [...(player.paofengPair ?? [])],
     redCount: player.redCount,
     drawnTileIndex: player.drawnTileIndex,
     // 暗牌脱敏：仅目标座位可见手牌；其余座位保留张数、置 null。

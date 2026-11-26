@@ -1,15 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { RULE_VARIANTS, BLOOD_FLOW_RULE, type RuleVariant } from '../../game/core/rules/ruleVariants'
+import { ref } from 'vue'
+import { RULE_VARIANTS, type RuleVariant } from '../../game/core/rules/ruleVariants'
 
-const props = defineProps<{ modelValue: RuleVariant; allowBloodFlow?: boolean }>()
+const props = defineProps<{ modelValue: RuleVariant }>()
 const emit = defineEmits<{ close: []; confirm: [value: RuleVariant]; viewRules: [] }>()
 const pending = ref(props.modelValue)
-const options = computed(() => (
-  props.allowBloodFlow && !RULE_VARIANTS.some((v) => v.id === BLOOD_FLOW_RULE.id)
-    ? [...RULE_VARIANTS, BLOOD_FLOW_RULE]
-    : RULE_VARIANTS
-))
+const options = RULE_VARIANTS
 </script>
 
 <template>

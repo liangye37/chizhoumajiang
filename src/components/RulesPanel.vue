@@ -2,9 +2,8 @@
 import { computed, ref, useId, watch } from 'vue'
 import { BASE_SCORE } from '../game/core/rules/rules'
 import { DISCLAIMER_SECTIONS, DISCLAIMER_TITLE } from '../content/disclaimer'
-import { gameRules, windKongDescription } from '../content/gameRules'
+import { congyangRules, gameRules, windKongDescription } from '../content/gameRules'
 import { DEFAULT_RULE_VARIANT, type RuleVariant } from '../game/core/rules/ruleVariants'
-import { BLOOD_FLOW_CONFIG } from '../game/variants/lotus/bloodFlow/config'
 import TableControlIcon from './table/TableControlIcon.vue'
 
 const props = defineProps<{ open: boolean; variant?: RuleVariant }>()
@@ -13,7 +12,7 @@ defineEmits(['close'])
 const fullRulesDialog = ref<HTMLDialogElement | null>(null)
 const fullRulesOpen = ref(false)
 const fullRulesId = useId()
-const chapters = computed(() => gameRules[props.variant ?? DEFAULT_RULE_VARIANT])
+const chapters = computed(() => gameRules[props.variant ?? DEFAULT_RULE_VARIANT] ?? congyangRules)
 
 function openFullRules() {
   const dialog = fullRulesDialog.value
@@ -59,6 +58,7 @@ const rules = computed(() => {
     ['胡牌来源', '仅支持自摸胡与抢杠胡，不支持点炮胡；听任意（单吊钻牌）时只能自摸，不可抢杠胡。'],
     ['面子规则', '钻牌可补缺张、做将；红中按替代牌参与判定；发财作为钻牌时可按普通牌面/钻牌参与。'],
     ['风杠', windKongDescription],
+    ['跑风规则', '完成 3+3+3+3+2 标准牌型且将牌对子含真钻牌（红中非钻时不计）时，可将对子亮出放手牌前发动跑风并轮转一圈。轮转中他家可碰杠但跑风者不可；轮回跑风者则成功（暂双倍）；期间他家自摸/抢杠为「捉」，跑风者包赔三倍给捉胡者；摸空流局按正常流局。'],
     ['收付方式', '每次胡牌，另外三家都分别向胡家付款；普通吃胡时，点炮者把自己那一笔再付双倍。自摸、抢杠不对某一付款者单独双付。'],
     ['起始分数', '每位玩家起始 2000 分，基础结算单位 100。'],
   ]

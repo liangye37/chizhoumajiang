@@ -578,6 +578,52 @@ export function isWinningHand(hand: TileType[], exposedMeldCount: number, jokers
   return evaluateBasePattern(hand, exposedMeldCount, jokers, ordinaryJokers, jokerSubstitutes) !== null
 }
 
+function canFormExactMelds(remaining: TileType[], neededMelds: number, jokers: TileType[]): boolean {
+  if (remaining.length !== neededMelds * 3) return false
+  for (const candidate of generateRedSubstitutionCandidates(remaining, jokers)) {
+    const filtered = applyFixedRedFaces(remaining, jokers, candidate.fixedRedFaces)
+    const jokerSet = new Set(jokers)
+    const wildcards = filtered.filter((t) => jokerSet.has(t)).length + candidate.wildcards
+    const naturals = filtered.filter((t) => !jokerSet.has(t))
+    if (canMakeMelds(countTiles(naturals), wildcards, neededMelds)) return true
+  }
+  for (const expanded of expandRedAsJokerFace(remaining, jokers)) {
+    const jokerSet = new Set(jokers)
+    const wildcards = expanded.filter((t) => jokerSet.has(t)).length
+    const naturals = expanded.filter((t) => !jokerSet.has(t))
+    if (canMakeMelds(countTiles(naturals), wildcards, neededMelds)) return true
+  }
+  return false
+}
+
+/**
+ * 跑风判定：手牌满足 3+3+3+3+2 标准牌型，且将牌对子中至少含有一张真正的钻牌
+ * （红中若不是钻牌则不可作为跑风对子里的钻）。返回可亮出的 2 张对子，否则返回 null。
+ */
+export function findPaofengPair(hand: TileType[], exposedMeldCount: number, jokers: TileType[]): [TileType, TileType] | null {
+  const neededMelds = 4 - exposedMeldCount
+  if (neededMelds < 0 || hand.length !== neededMelds * 3 + 2) return null
+  const jokerSet = new Set(jokers)
+  const jokerIndices = hand
+    .map((tile, index) => (jokerSet.has(tile) ? index : -1))
+    .filter((index) => index >= 0)
+  if (!jokerIndices.length) return null
+
+  const seenPairs = new Set<string>()
+  for (const jokerIdx of jokerIndices) {
+    for (let otherIdx = 0; otherIdx < hand.length; otherIdx += 1) {
+      if (otherIdx === jokerIdx) continue
+      const pair: [TileType, TileType] = [hand[jokerIdx], hand[otherIdx]]
+      const key = [...pair].sort().join(',')
+      if (seenPairs.has(key)) continue
+      seenPairs.add(key)
+      const remaining = hand.filter((_, idx) => idx !== jokerIdx && idx !== otherIdx)
+      if (canFormExactMelds(remaining, neededMelds, jokers)) return pair
+    }
+  }
+  return null
+}
+
 // ── 番数与收付 ──────────────────────────────────────────────────────
 
 /** 结算底分：H = 底分 × 基础番数（与 LOTUS_RULESET.baseScore 同值）。 */
@@ -595,6 +641,7 @@ export interface ScoreFlags {
   kongBloom: boolean
   tianhu: boolean
   dihu: boolean
+  paofengSuccess?: boolean
 }
 
 export interface FanPattern {
@@ -699,15 +746,24 @@ export function scoreFan(
     fan *= 2
     patterns.push({ label: '庄家', multiplier: 2 })
   }
+  const settlement = winPayments(base.fan, {
+    winnerIsDealer: flags.dealer,
+    selfDrawStyle,
+    discarderIsDealer: flags.discarderIsDealer,
+  })
+  if (flags.paofengSuccess) {
+    fan *= 2
+    patterns.push({ label: '跑风成功', multiplier: 2 })
+    settlement.H *= 2
+    settlement.dealerPays *= 2
+    settlement.nonDealerPays *= 2
+    settlement.total *= 2
+  }
   return {
     fan,
     baseFan: base.fan,
     patterns,
-    settlement: winPayments(base.fan, {
-      winnerIsDealer: flags.dealer,
-      selfDrawStyle,
-      discarderIsDealer: flags.discarderIsDealer,
-    }),
+    settlement,
   }
 }
 

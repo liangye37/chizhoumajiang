@@ -13,6 +13,8 @@ export interface LotusEndGameOptions {
   robbedKongPlayerIndex?: number
   tianhu?: boolean
   dihu?: boolean
+  paofengSuccess?: boolean
+  caughtPaofengSeat?: number
   sourceFrom?: number
 }
 
@@ -41,6 +43,8 @@ export function createLotusGameState() {
     secondDice: ref<[number, number] | null>(null),
     /** 本局是否尚未打出第一张牌（庄家首弃 = 地胡判定窗口） */
     roundFirstDiscard: ref(false),
+    /** 当前正在“跑风”的玩家座位（无则为 null） */
+    paofengSeat: ref<number | null>(null),
   }
 }
 

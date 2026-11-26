@@ -11,7 +11,7 @@ import {
   buildRingWall,
   removeFlipStack,
   resolveFlip,
-  resolveOpeningStack,
+  resolveOpeningFromDice,
   wallBreakIndexForOpeningStack,
 } from './lotusWall'
 
@@ -66,6 +66,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
   }
 
   function resetPlayers() {
+    state.paofengSeat.value = null
     resetLocalPlayers(state, 2000, options.playerSeeds, options.humanPlayerSeed)
   }
 
@@ -126,8 +127,9 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     state.lastDiscardSound.value = null
     state.phase.value = 'dealing'
     state.dealAnimation.value = { playerIndex: -1, count: 0, serial: 0 }
-    // 第一次掷骰由庄家投掷；第二次会在翻精后切换为翻精目标方。
-    state.diceThrowerIndex.value = state.dealer.value
+    const hasEstablishedDealer = state.round.value > 1 || typeof startOptions.dealer === 'number'
+    const firstThrower = hasEstablishedDealer ? state.dealer.value : Math.floor(Math.random() * 4)
+    state.diceThrowerIndex.value = firstThrower
     state.flipTile.value = null
     state.jokerTiles.value = []
     state.wildcardTiles.value = ['red']
@@ -147,19 +149,38 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     await Promise.all([options.playSoundAndWait('game_start.mp3'), options.wait(1250)])
     if (currentSequence !== sequence) return
 
-    // 第一次掷骰：定翻精方位与墩位。diceValues 会在第二次掷骰时被覆盖，
-    // 必须把第一次点数单独保留，供联机 round_start 的一骰使用（对齐单人模式）。
-    const firstDice: [number, number] = startOptions.openingDice
-      ? [...startOptions.openingDice] as [number, number]
-      : [roll(), roll()]
-    state.diceValues.value = firstDice
-    state.firstDice.value = firstDice
+    let firstDice: [number, number] | null = null
+    let secondThrower = state.dealer.value
+
+    if (!hasEstablishedDealer) {
+      // 首局尚无庄家：随机一人先掷第一次骰子，按点数决定第二次掷骰者。
+      firstDice = startOptions.openingDice
+        ? [...startOptions.openingDice] as [number, number]
+        : [roll(), roll()]
+      state.diceValues.value = firstDice
+      state.firstDice.value = firstDice
+      state.openingStage.value = 'dice'
+      await Promise.all([options.playSoundAndWait('dice.mp3'), options.wait(1600)])
+      if (currentSequence !== sequence) return
+      secondThrower = (firstThrower + firstDice[0] + firstDice[1] - 1) % 4
+      state.dealer.value = secondThrower
+    }
+
+    // 第二次掷骰（或次局起直接由庄家掷骰）：决定翻钻位置与开牌墩位。
+    state.diceThrowerIndex.value = secondThrower
+    const secondDice: [number, number] = startOptions.openingSecondDice
+      ? [...startOptions.openingSecondDice] as [number, number]
+      : (hasEstablishedDealer && startOptions.openingDice
+          ? [...startOptions.openingDice] as [number, number]
+          : [roll(), roll()])
+    state.diceValues.value = secondDice
+    state.secondDice.value = secondDice
     state.openingStage.value = 'dice'
     await Promise.all([options.playSoundAndWait('dice.mp3'), options.wait(1600)])
     if (currentSequence !== sequence) return
 
-    // 翻精：从牌山翻出指示牌（翻精墩整体移出，牌山空出该墩并立起指示牌）
-    const { flipSeat, flipStack, flipTile, jokers } = resolveFlip(ring, state.dealer.value, firstDice)
+    // 翻钻：从投骰者下家面前牌堆从左向右按较小点数 M 翻出指示牌
+    const { flipSeat, flipStack, flipTile, jokers } = resolveFlip(ring, secondThrower, secondDice)
     state.flipSeat.value = flipSeat
     state.wall.value = removeFlipStack(ring, flipStack)
     state.flipStack.value = flipStack
@@ -170,21 +191,8 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     await options.wait(1200)
     if (currentSequence !== sequence) return
 
-    // 第二次掷骰由第一次点数确定的目标方位玩家投掷；必须先切换投掷者，
-    // 再写入第二次骰子值，确保骰子动画从一开始就显示正确的玩家。
-    state.diceThrowerIndex.value = flipSeat
-    // 第二次掷骰：两个骰子的点数和作为开牌依据。
-    const secondDice: [number, number] = startOptions.openingSecondDice
-      ? [...startOptions.openingSecondDice] as [number, number]
-      : [roll(), roll()]
-    state.diceValues.value = secondDice
-    state.secondDice.value = secondDice
-    state.openingStage.value = 'dice'
-    await Promise.all([options.playSoundAndWait('dice.mp3'), options.wait(1600)])
-    if (currentSequence !== sequence) return
-
-    // 开门：从翻精所在墩顺时针向后数 T+1 墩为发牌/正常摸牌起点，重排为发牌顺序
-    const openingStack = resolveOpeningStack(flipStack, secondDice)
+    // 开门：从投骰者面前牌堆从右向左保留 T 墩，从此人开始顺时针摸牌
+    const openingStack = resolveOpeningFromDice(secondThrower, secondDice)
     state.wall.value = buildDrawOrderWall(ring, openingStack, flipStack)
     state.wallBreakIndex.value = wallBreakIndexForOpeningStack(openingStack, flipStack)
 
@@ -192,7 +200,7 @@ export function createLotusOpening(options: LotusOpeningOptions) {
     // 会被发牌改写，局末再读它们拿到的是终局状态（不是复现起点）—— 血流在同一个地方踩过坑。
     options.onRoundPrepared?.({
       ringWall: [...ring],
-      firstDice: [...firstDice] as [number, number],
+      firstDice: (firstDice ?? secondDice) as [number, number],
       secondDice: [...secondDice] as [number, number],
       dealer: state.dealer.value,
     })

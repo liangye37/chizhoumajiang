@@ -29,5 +29,11 @@ export function createLotusSelectors(state: LotusGameState, ruleset: RuleSet = L
     && common.isUserTurn.value
     && state.userDrewThisTurn.value
     && windKong(common.user.value!.hand, state.jokerTiles.value))
-  return { ...common, ...playerSelectors, userHasWindKong }
+  return {
+    ...common,
+    ...playerSelectors,
+    roundLabel: computed(() => `第 ${state.round.value} 局`),
+    matchName: computed(() => '四人麻将'),
+    userHasWindKong,
+  }
 }

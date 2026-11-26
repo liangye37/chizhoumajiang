@@ -41,6 +41,7 @@ export function resetLocalPlayers(
       hand: [],
       discards: [],
       greenDiscards: [],
+      paofengPair: [],
       melds: [],
       redCount: 0,
       drawnTileIndex: -1,

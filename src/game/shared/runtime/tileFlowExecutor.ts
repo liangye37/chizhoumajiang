@@ -38,6 +38,7 @@ interface TileFlowOptions {
   discardInterceptor?: (playerIndex: number, tile: TileType) => Promise<boolean>
   takeTailTile?: (wall: TileType[], headDrawn: number) => TileType | null
   initialWallSize?: number
+  minRemainingTiles?: number
   /** 跟庄规则跟踪器：每次出牌后、响应编排前调用（可选）。 */
   followDealer?: FollowDealerTracker
 }
@@ -60,7 +61,7 @@ export function takeStackTailTile(
 export function createTileFlowExecutor(options: TileFlowOptions) {
   const { state } = options
   function takeTile(fromTail = false) {
-    if (!state.wall.value.length) return null
+    if (state.wall.value.length <= (options.minRemainingTiles ?? 0)) return null
     if (!fromTail) state.wallHeadDrawn.value += 1
     if (!fromTail) return state.wall.value.shift() ?? null
     return options.takeTailTile?.(state.wall.value, state.wallHeadDrawn.value)

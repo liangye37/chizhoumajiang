@@ -93,10 +93,17 @@ export function discardTileLayout(seat:number,index:number) {
 export function greenDiscardTileLayout(seat: number, index: number) {
   const row = Math.floor(index / 4)
   const col = index % 4
-  if (seat === 0) return { x: 7.6 + col * .78, z: 7.3 - row * .78, rotation: 0 }
+  if (seat === 0) return { x: 7.6 + col * .78, z: 9.2 - row * .78, rotation: 0 }
   if (seat === 1) return { x: 9.6 - row * .78, z: -6.4 + col * .78, rotation: Math.PI / 2 }
   if (seat === 2) return { x: -5.8 - col * .78, z: -9.6 + row * .78, rotation: Math.PI }
   return { x: -9.6 + row * .78, z: 6.4 - col * .78, rotation: -Math.PI / 2 }
+}
+
+/** 跑风亮牌摆放区：放在手牌正前方，不进牌堆/牌河。 */
+export function paofengTileLayout(seat: number, index: number) {
+  const lateral = (index - 0.5) * TABLE_LAYOUT.tilePitch
+  const depth = seat % 2 ? 7.8 : 6.9
+  return { ...pointFromSeat(seat, lateral, depth), rotation: [0, Math.PI / 2, Math.PI, -Math.PI / 2][seat] }
 }
 
 /** Keep revealed side hands clear of the reserved corner row as well as live walls. */

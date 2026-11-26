@@ -102,8 +102,10 @@ export interface RoundResult {
   robbedKong?: boolean
   robbedKongPlayerIndex?: number
   winTile?: TileType
-  /** 莲花麻将胡牌类型（自摸/点炮/抢杠/天胡/地胡），供结算标题展示。 */
-  winType?: 'self-draw' | 'discard' | 'robbed-kong' | 'tianhu' | 'dihu'
+  /** 莲花麻将胡牌类型（自摸/点炮/抢杠/天胡/地胡/跑风/捉跑风），供结算标题展示。 */
+  winType?: 'self-draw' | 'discard' | 'robbed-kong' | 'tianhu' | 'dihu' | 'paofeng' | 'caught-paofeng'
+  paofengSuccess?: boolean
+  caughtPaofengSeat?: number
 }
 
 export interface WinEffect {
@@ -133,6 +135,7 @@ export interface GameCapabilities {
   bloodFlow?: BloodFlowTableState | null
   chi?: { choose(optionIndex: number): void }
   windKong?: { available: boolean; execute(): void }
+  paofeng?: { available: boolean; execute(): void }
   lotusTable?: {
     flipTile: TileType | null
     jokerTiles: TileType[]

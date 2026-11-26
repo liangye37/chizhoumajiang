@@ -626,6 +626,7 @@ watch(
     player.drawnTileIndex,
     player.discards.join(','),
     (player.greenDiscards ?? []).join(','),
+    (player.paofengPair ?? []).join(','),
     player.melds.map((meld) => `${meld.type}:${meld.from ?? '-'}:${meld.tiles.join(',')}`).join('|'),
   ]).flat() as unknown[]).concat(
     props.lastDiscard?.id,

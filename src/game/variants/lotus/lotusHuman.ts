@@ -112,6 +112,10 @@ export function createLotusHuman(options: LotusHumanOptions) {
     void options.kong.performWindKong(0)
   }
 
+  function userPaofeng() {
+    if (humanController.hasPendingTurn()) return humanController.resolvePaofeng()
+  }
+
   function userChi(_chiIndex = 0) {
     console.log('枞阳规则：不能吃牌')
   }
@@ -142,6 +146,6 @@ export function createLotusHuman(options: LotusHumanOptions) {
 
   return {
     selectTile, clearUserSelection, userDiscard, userPass, userPeng,
-    userGangFromDiscard, userGang, userWindKong, userChi, userHu,
+    userGangFromDiscard, userGang, userWindKong, userPaofeng, userChi, userHu,
   }
 }
