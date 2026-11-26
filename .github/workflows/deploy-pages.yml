@@ -29,7 +29,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Build
         env:
-          VITE_SELF_HOST_SIGNALING: ${{ vars.VITE_SELF_HOST_SIGNALING }}
+          VITE_SELF_HOST_SIGNALING: ${{ vars.VITE_SELF_HOST_SIGNALING || 'wss://chizhou-mahjong-relay.chizhou-majiang-liangye37.workers.dev/signal' }}
         run: pnpm build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
