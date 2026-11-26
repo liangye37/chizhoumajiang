@@ -53,6 +53,7 @@ export class RoomRelay implements DurableObject {
 
   constructor(state: DurableObjectState) {
     this.state = state
+    this.state.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"type":"ping"}', '{"type":"pong"}'))
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -101,6 +102,11 @@ export class RoomRelay implements DurableObject {
     if (!msg || typeof msg !== 'object') return
 
     const type = msg.type
+
+    if (type === 'ping') {
+      this.sendJson(ws, { type: 'pong' })
+      return
+    }
 
     if (type === 'join') {
       const roomId = String(msg.roomId ?? '').trim().toUpperCase()

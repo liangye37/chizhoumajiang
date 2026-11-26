@@ -227,6 +227,11 @@ function attachSignaling(ws) {
     try { msg = JSON.parse(raw) } catch { return }
     if (!msg || typeof msg !== 'object') return
 
+    if (msg.type === 'ping') {
+      ws.send({ type: 'pong' })
+      return
+    }
+
     if (msg.type === 'join') {
       const nextRoomId = String(msg.roomId ?? '').trim().toUpperCase()
       if (!nextRoomId) {

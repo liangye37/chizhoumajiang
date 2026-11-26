@@ -62,7 +62,8 @@ export function createWsRelayRoom(signaling: SignalingConnection): VibeHubSDK.Ro
     }
   }
 
-  const room: VibeHubSDK.Room = {
+  const room: VibeHubSDK.Room & { __wsRelay?: boolean } = {
+    __wsRelay: true,
     roomId: signaling.roomId,
     peerId: signaling.peerId,
     topology: 'host',

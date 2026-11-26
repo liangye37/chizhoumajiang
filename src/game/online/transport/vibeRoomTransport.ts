@@ -142,9 +142,11 @@ function sanitizeForWire(message: object): Record<string, unknown> | null {
 export function sendChunked(room: VibeHubSDK.Room, message: object, to?: string): boolean {
   const wire = sanitizeForWire(message)
   if (!wire) return false
+  const isWsRelay = Boolean((room as { __wsRelay?: boolean }).__wsRelay)
   const text = JSON.stringify(wire)
   const bytes = new TextEncoder().encode(text).length
-  const parts = chunkEnvelope(text)
+  // 直连 WebSocket（Cloudflare / 局域网一体服）单帧支持至 1MB，无需按 VibeHub SDK 的 4KB 上限做 Base64 分片。
+  const parts = isWsRelay ? [] : chunkEnvelope(text)
   if (parts.length) {
     if (TRANSPORT_DIAG) {
       console.log(`[transport] 大包分片 kind=${String(wire.kind)} bytes=${bytes} chunks=${parts.length} to=${to ?? 'all'}`)
